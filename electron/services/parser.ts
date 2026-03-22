@@ -2,6 +2,70 @@ import fs from 'fs'
 import path from 'path'
 import { parseStringPromise } from 'xml2js'
 
+// Detect encoding from XML declaration or BOM, then return file content as UTF-8 string
+function readFileWithEncoding(filePath: string): string {
+  const raw = fs.readFileSync(filePath)
+
+  // Check BOM for UTF-16/UTF-8
+  if (raw[0] === 0xFF && raw[1] === 0xFE) {
+    return raw.toString('utf16le')
+  }
+  if (raw[0] === 0xFE && raw[1] === 0xFF) {
+    // UTF-16 BE — swap bytes then decode
+    for (let i = 0; i < raw.length - 1; i += 2) {
+      const tmp = raw[i]
+      raw[i] = raw[i + 1]
+      raw[i + 1] = tmp
+    }
+    return raw.toString('utf16le')
+  }
+  if (raw[0] === 0xEF && raw[1] === 0xBB && raw[2] === 0xBF) {
+    return raw.toString('utf-8')
+  }
+
+  // Try UTF-8 first — check if the first 4KB decodes cleanly
+  const sample = raw.subarray(0, Math.min(4096, raw.length)).toString('utf-8')
+  if (!sample.includes('\uFFFD')) {
+    return raw.toString('utf-8')
+  }
+
+  // Check XML declaration for encoding attribute
+  const header = raw.subarray(0, Math.min(512, raw.length)).toString('ascii')
+  const encodingMatch = header.match(/encoding=["']([^"']+)["']/i)
+  if (encodingMatch) {
+    const declared = encodingMatch[1].toLowerCase()
+    // Map common FB2 encodings to Node.js buffer encoding names
+    const encodingMap: Record<string, string> = {
+      'windows-1251': 'windows-1251',
+      'cp1251': 'windows-1251',
+      'win-1251': 'windows-1251',
+      'koi8-r': 'koi8-r',
+      'koi8r': 'koi8-r',
+      'iso-8859-5': 'iso-8859-5',
+      'utf-8': 'utf-8',
+    }
+    const nodeEncoding = encodingMap[declared]
+    if (nodeEncoding && nodeEncoding !== 'utf-8') {
+      const { TextDecoder } = require('util')
+      try {
+        const decoder = new TextDecoder(nodeEncoding)
+        return decoder.decode(raw)
+      } catch {
+        // Fallback below
+      }
+    }
+  }
+
+  // Last resort: try windows-1251 (most common non-UTF-8 FB2 encoding)
+  try {
+    const { TextDecoder } = require('util')
+    const decoder = new TextDecoder('windows-1251')
+    return decoder.decode(raw)
+  } catch {
+    return raw.toString('utf-8')
+  }
+}
+
 export interface BookContent {
   title: string
   author: string
@@ -28,8 +92,10 @@ export async function parseBook(filePath: string): Promise<BookContent> {
 }
 
 async function parseFB2(filePath: string): Promise<BookContent> {
-  const content = fs.readFileSync(filePath, 'utf-8')
-  const result = await parseStringPromise(content, { explicitArray: false })
+  const content = readFileWithEncoding(filePath)
+  // Strip encoding declaration so xml2js always parses as UTF-8 string
+  const cleanedContent = content.replace(/encoding=["'][^"']+["']/i, 'encoding="utf-8"')
+  const result = await parseStringPromise(cleanedContent, { explicitArray: false })
 
   const fictionBook = result.FictionBook || result['fiction-book']
   if (!fictionBook) {
@@ -398,7 +464,7 @@ function stripHtml(html: string): string {
 }
 
 async function parseTXT(filePath: string): Promise<BookContent> {
-  const content = fs.readFileSync(filePath, 'utf-8')
+  const content = readFileWithEncoding(filePath)
   const fileName = path.basename(filePath, '.txt')
 
   // Split into paragraphs

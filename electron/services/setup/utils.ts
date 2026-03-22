@@ -83,8 +83,13 @@ export async function runPipWithProgress(
       console.log('[runPipWithProgress] command:', command, spawnArgs.join(' '))
     }
 
+    // On Windows with MSVC, we already use cmd.exe /c which needs shell.
+    // On Windows without MSVC, shell:true is needed for pip progress parsing.
+    // On macOS/Linux, shell:false avoids path-with-spaces breakage.
+    const useShell = process.platform === 'win32'
+
     const proc = spawn(command, spawnArgs, {
-      shell: true, // Always use shell for proper command parsing
+      shell: useShell,
       env
     })
 

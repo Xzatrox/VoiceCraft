@@ -425,10 +425,9 @@ async function installFfmpegMacOS(
       // Homebrew not available or install failed
     }
 
-    // Download static binary as last resort
+    // Download static binary as last resort (x86_64, runs on arm64 via Rosetta 2)
     onProgress({ stage: 'ffmpeg', progress: 5, details: 'Downloading FFmpeg...' })
-    const arch = process.arch === 'arm64' ? 'arm64' : 'amd64'
-    const ffmpegUrl = `https://www.osxexperts.net/ffmpeg7${arch}.zip`
+    const ffmpegUrl = 'https://evermeet.cx/ffmpeg/getrelease/zip'
     const zipPath = path.join(ffmpegPath, 'ffmpeg-macos.zip')
 
     await downloadFile(ffmpegUrl, zipPath, (downloaded, total) => {
@@ -717,7 +716,7 @@ export async function installSilero(
 
     const depsResult = await runPipWithProgress(
       targetPython,
-      'omegaconf==2.3.0 numpy==1.26.4 scipy==1.14.1 flask==3.0.3 psutil==6.1.0',
+      'omegaconf==2.3.0 numpy==1.26.4 scipy>=1.13.0,<2.0 flask==3.0.3 psutil==6.1.0',
       {
         timeout: 180000,
         onProgress: (info) => {
@@ -1303,7 +1302,7 @@ export async function installCoqui(
 
     const depsResult = await runPipWithProgress(
       targetPython,
-      'numpy==1.26.4 scipy==1.14.1 omegaconf==2.3.0',
+      'numpy==1.26.4 scipy>=1.13.0,<2.0 omegaconf==2.3.0',
       {
         timeout: 300000,
         extraArgs: ['--prefer-binary'],
