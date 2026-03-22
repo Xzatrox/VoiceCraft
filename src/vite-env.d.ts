@@ -24,7 +24,7 @@ interface VoiceInfo {
   shortName: string
   gender: 'Male' | 'Female'
   locale: string
-  provider: 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice'
+  provider: 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice' | 'qwen'
   modelPath?: string
   voiceId?: string
   isInstalled?: boolean
@@ -63,6 +63,8 @@ interface DependencyStatus {
   coqui: boolean
   coquiAvailable: boolean
   coquiBuildToolsAvailable: boolean
+  qwen: boolean
+  qwenAvailable: boolean
   rhvoiceCore: boolean
   rhvoiceVoices: string[]
   piperVoices: {
@@ -124,6 +126,7 @@ interface TTSServerStatus {
   running: boolean
   silero: { ru_loaded: boolean; en_loaded: boolean }
   coqui: { loaded: boolean }
+  qwen: { loaded: boolean }
   memory_gb: number
   cpu_percent: number
   device: string
@@ -164,8 +167,8 @@ interface ElectronAPI {
   ttsServerStart: () => Promise<{ success: boolean; error?: string }>
   ttsServerStop: () => Promise<{ success: boolean; error?: string }>
   ttsServerStatus: () => Promise<TTSServerStatus>
-  ttsModelLoad: (engine: 'silero' | 'coqui', language?: string) => Promise<{ success: boolean; memory_gb: number; error?: string }>
-  ttsModelUnload: (engine: 'silero' | 'coqui' | 'all', language?: string) => Promise<{ success: boolean; memory_gb: number }>
+  ttsModelLoad: (engine: 'silero' | 'coqui' | 'qwen', language?: string) => Promise<{ success: boolean; memory_gb: number; error?: string }>
+  ttsModelUnload: (engine: 'silero' | 'coqui' | 'qwen' | 'all', language?: string) => Promise<{ success: boolean; memory_gb: number }>
   ttsSetDevice: (device: string) => Promise<{ success: boolean; error?: string }>
 
   // Setup API
@@ -177,6 +180,7 @@ interface ElectronAPI {
   getPythonInfo: () => Promise<{ available: boolean; path: string | null; isEmbedded: boolean; version: string | null }>
   installSilero: (accelerator?: AcceleratorType) => Promise<{ success: boolean; error?: string }>
   installCoqui: (accelerator?: AcceleratorType) => Promise<{ success: boolean; error?: string; needsBuildTools?: boolean }>
+  installQwen: (accelerator?: AcceleratorType) => Promise<{ success: boolean; error?: string }>
   checkBuildTools: () => Promise<boolean>
   installBuildTools: () => Promise<{ success: boolean; error?: string; requiresRestart?: boolean }>
   installPiper: () => Promise<{ success: boolean; error?: string }>
@@ -186,8 +190,10 @@ interface ElectronAPI {
   getAvailableAccelerators: () => Promise<AvailableAccelerators>
   getCurrentSileroAccelerator: () => Promise<AcceleratorConfig | null>
   getCurrentCoquiAccelerator: () => Promise<AcceleratorConfig | null>
+  getCurrentQwenAccelerator: () => Promise<AcceleratorConfig | null>
   reinstallSileroWithAccelerator: (accelerator: AcceleratorType) => Promise<{ success: boolean; error?: string }>
   reinstallCoquiWithAccelerator: (accelerator: AcceleratorType) => Promise<{ success: boolean; error?: string }>
+  reinstallQwenWithAccelerator: (accelerator: AcceleratorType) => Promise<{ success: boolean; error?: string }>
   onReinstallProgress: (callback: (data: ReinstallProgress) => void) => () => void
   checkGPUToolkit: (accelerator: AcceleratorType) => Promise<{
     available: boolean

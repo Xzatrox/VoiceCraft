@@ -57,6 +57,7 @@ export {
   getSileroScript,
   getCoquiPythonExecutable,
   getCoquiScript,
+  getQwenPythonExecutable,
   getFfmpegExecutable
 } from './tts/utils'
 

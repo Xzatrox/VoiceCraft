@@ -13,7 +13,7 @@ export function getResourcesPath(): string {
 }
 
 // Get active accelerator setting for an engine
-function getActiveAccelerator(engine: 'silero' | 'coqui'): AcceleratorType {
+function getActiveAccelerator(engine: 'silero' | 'coqui' | 'qwen'): AcceleratorType {
   try {
     const settingsPath = path.join(getResourcesPath(), 'accelerator-settings.json')
     if (existsSync(settingsPath)) {
@@ -72,6 +72,18 @@ export function getCoquiScript(): string {
   const resourcesPath = getResourcesPath()
   const activeAccelerator = getActiveAccelerator('coqui')
   return path.join(resourcesPath, `coqui-${activeAccelerator}`, 'generate.py')
+}
+
+// Get path to Python executable for Qwen
+// Uses accelerator-specific Python (qwen-cpu/python, qwen-cuda/python)
+export function getQwenPythonExecutable(): string {
+  const resourcesPath = getResourcesPath()
+  const activeAccelerator = getActiveAccelerator('qwen')
+  const qwenPath = path.join(resourcesPath, `qwen-${activeAccelerator}`)
+  if (process.platform === 'darwin') {
+    return path.join(qwenPath, 'python', 'bin', 'python3')
+  }
+  return path.join(qwenPath, 'python', 'python.exe')
 }
 
 // Get path to ffmpeg executable

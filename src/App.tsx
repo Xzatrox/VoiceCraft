@@ -334,7 +334,7 @@ function App() {
       const currentVoiceValid = providerVoices.some(v => v.shortName === selectedVoice)
       if (currentVoiceValid) return
       setSelectedVoice(providerVoices[0].shortName)
-    } else if (selectedProvider === 'silero' || selectedProvider === 'coqui') {
+    } else if (selectedProvider === 'silero' || selectedProvider === 'coqui' || selectedProvider === 'qwen') {
       setSelectedVoice('')
     } else if (voices.length > 0) {
       setSelectedProvider('piper')

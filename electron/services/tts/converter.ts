@@ -24,7 +24,8 @@ import {
   PIPER_VOICES,
   SILERO_VOICES,
   ELEVENLABS_VOICES,
-  COQUI_VOICES
+  COQUI_VOICES,
+  QWEN_VOICES
 } from './voices'
 import { getElevenLabsApiKey } from './providers'
 import { getCustomVoiceAudioPath } from './customVoices'
@@ -1136,6 +1137,16 @@ async function generateChunkAudio(
       await generateSpeechWithCoqui(chunk, voiceInfo.modelPath || '', voiceInfo.locale, outputFile, options.speakerWav, options.useRuaccent)
       break
 
+    case 'qwen': {
+      const serverStatus = await getTTSServerStatus()
+      if (!serverStatus.running || !serverStatus.qwen?.loaded) {
+        throw new Error('Qwen model is not loaded. Please load it first.')
+      }
+      const qwenLang = voiceInfo.locale?.startsWith('ru') ? 'ru' : 'en'
+      await generateViaServer('qwen', chunk, voiceInfo.shortName, qwenLang, outputFile)
+      break
+    }
+
     default:
       throw new Error(`Unknown provider: ${voiceInfo.provider}`)
   }
@@ -1419,7 +1430,8 @@ export async function convertToSpeech(
     ...Object.values(PIPER_VOICES).flat(),
     ...Object.values(SILERO_VOICES).flat(),
     ...Object.values(ELEVENLABS_VOICES).flat(),
-    ...Object.values(COQUI_VOICES).flat()
+    ...Object.values(COQUI_VOICES).flat(),
+    ...Object.values(QWEN_VOICES).flat()
   ]
 
   voiceInfo = allVoices.find(v => v.shortName === voiceShortName)
@@ -1452,7 +1464,7 @@ export async function convertToSpeech(
   // Silero and Coqui have token limits in the positional encoder.
   // Cyrillic/non-Latin text expands to more tokens, so use smaller chunks.
   // Coqui XTTS is especially sensitive, use even smaller chunks (250 chars)
-  const maxChunkLength = voiceInfo.provider === 'coqui' ? 250 :
+  const maxChunkLength = voiceInfo.provider === 'coqui' || voiceInfo.provider === 'qwen' ? 250 :
                          voiceInfo.provider === 'silero' ? 500 : 1000
   // Pass language to convert numbers to words for Silero/Coqui
   const language = voiceInfo.locale || 'en'
@@ -1464,7 +1476,7 @@ export async function convertToSpeech(
 
   const totalChunks = chunks.length
   // Coqui has smaller chunks, so use larger parts (200 instead of 100)
-  const chunksPerPart = voiceInfo.provider === 'coqui' ? 200 : 100
+  const chunksPerPart = voiceInfo.provider === 'coqui' || voiceInfo.provider === 'qwen' ? 200 : 100
   const totalParts = Math.ceil(totalChunks / chunksPerPart)
 
   // Each chunk can produce multiple files if it was split due to errors
@@ -1477,7 +1489,7 @@ export async function convertToSpeech(
 
   // Concurrency limits depend on provider
   // Coqui XTTS is slow and memory-intensive, process sequentially
-  const concurrentLimit = voiceInfo.provider === 'coqui' ? 1 :
+  const concurrentLimit = voiceInfo.provider === 'coqui' || voiceInfo.provider === 'qwen' ? 1 :
                          voiceInfo.provider === 'silero' ? 5 :
                          voiceInfo.provider === 'piper' ? 10 :
                          voiceInfo.provider === 'elevenlabs' ? 3 : 30
@@ -1690,7 +1702,8 @@ export async function previewVoice(
     ...Object.values(PIPER_VOICES).flat(),
     ...Object.values(SILERO_VOICES).flat(),
     ...Object.values(ELEVENLABS_VOICES).flat(),
-    ...Object.values(COQUI_VOICES).flat()
+    ...Object.values(COQUI_VOICES).flat(),
+    ...Object.values(QWEN_VOICES).flat()
   ]
 
   let voiceInfo = allVoices.find(v => v.shortName === voiceShortName)
@@ -1733,7 +1746,7 @@ export async function previewVoice(
 
   // Convert numbers to words for Silero and Coqui providers
   let processedText = text
-  if (voiceInfo.provider === 'silero' || voiceInfo.provider === 'coqui') {
+  if (voiceInfo.provider === 'silero' || voiceInfo.provider === 'coqui' || voiceInfo.provider === 'qwen') {
     processedText = cleanTextForTTS(text)
     processedText = convertNumbersToWords(processedText, voiceInfo.locale || 'en')
   }
@@ -1773,6 +1786,12 @@ export async function previewVoice(
         }
         await generateSpeechWithCoquiForPreview(processedText, voiceInfo.modelPath || '', voiceInfo.locale, tempWavFile, speakerWav, options.useRuaccent)
         break
+
+      case 'qwen': {
+        const qwenLang = voiceInfo.locale?.startsWith('ru') ? 'ru' : 'en'
+        await generateViaServerForPreview('qwen', processedText, voiceInfo.shortName, qwenLang, tempWavFile)
+        break
+      }
 
       default:
         return { success: false, error: `Unknown provider: ${voiceInfo.provider}` }

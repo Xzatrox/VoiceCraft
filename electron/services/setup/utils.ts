@@ -44,7 +44,12 @@ export async function runPipWithProgress(
     }
 
     // Add packages (split by space, filter out empty strings)
-    pipArgs.push(...packages.split(' ').filter(p => p.trim()))
+    // On Windows with shell:true, > and < are interpreted as redirects by cmd.exe,
+    // so we must quote package specifiers containing these characters
+    const pkgs = packages.split(' ').filter(p => p.trim()).map(p =>
+      process.platform === 'win32' && /[><]/.test(p) ? `"${p}"` : p
+    )
+    pipArgs.push(...pkgs)
 
     // Build environment with Python include/libs paths for C extension compilation
     const env: Record<string, string | undefined> = { ...process.env, PYTHONIOENCODING: 'utf-8' }

@@ -183,7 +183,16 @@ export function TTSModelPanel({
     )
   }
 
-  // Coqui panel
+  // Coqui / Qwen panel
+  const isCoqui = provider === 'coqui'
+  const panelTitle = isCoqui ? 'Coqui XTTS-v2' : 'Qwen3-TTS'
+  const panelSubtitle = isCoqui ? t.providers.coqui.multilingualNeural : t.providers.qwen.instructionSupport
+  const chipLabel = isCoqui ? 'XTTS v2' : 'Qwen3-TTS'
+  const isLoaded = isCoqui ? serverStatus?.coqui.loaded === true : serverStatus?.qwen?.loaded === true
+  const loadingKey = isCoqui ? 'coqui' : 'qwen'
+  const gpuSpeedupText = isCoqui ? t.gpu.coquiSpeedup : t.gpu.qwenSpeedup
+  const cudaSize = isCoqui ? '~4.5 GB' : '~2.5 GB'
+
   return (
     <div className="space-y-3 p-3 border rounded-md bg-gradient-to-b from-muted/40 to-muted/20">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -194,8 +203,8 @@ export function TTSModelPanel({
       <div className="p-3 rounded-lg border bg-background/50">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className="font-medium text-sm">Coqui XTTS-v2</div>
-            <span className="text-xs text-muted-foreground">{t.providers.coqui.multilingualNeural}</span>
+            <div className="font-medium text-sm">{panelTitle}</div>
+            <span className="text-xs text-muted-foreground">{panelSubtitle}</span>
           </div>
           <div className="flex items-center gap-1">
             <div
@@ -221,21 +230,21 @@ export function TTSModelPanel({
                 <PopoverContent className="w-72 p-3" align="end">
                   <div className="text-xs font-medium mb-2">{t.gpu.accelerationEnabled}</div>
                   <div className="text-[11px] text-muted-foreground mb-3">
-                    {t.gpu.coquiSpeedup}
+                    {gpuSpeedupText}
                   </div>
                   {availableAccelerators?.cuda.name && (
                     <button
                       className="w-full flex items-center gap-2 text-xs p-2 rounded border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors text-left cursor-pointer mb-2"
                       onClick={() => {
                         onGpuPopoverChange(false)
-                        onShowReinstallConfirm('coqui', 'cuda')
+                        onShowReinstallConfirm(provider, 'cuda')
                       }}
                     >
                       <Zap className="h-3.5 w-3.5 text-amber-500" />
                       <div className="flex-1">
                         <div className="font-medium">NVIDIA CUDA</div>
                         <div className="text-[10px] text-muted-foreground">
-                          {availableAccelerators?.cuda.name} · ~4.5 GB
+                          {availableAccelerators?.cuda.name} · {cudaSize}
                         </div>
                       </div>
                     </button>
@@ -245,7 +254,7 @@ export function TTSModelPanel({
                       className="w-full flex items-center gap-2 text-xs p-2 rounded border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 transition-colors text-left cursor-pointer mb-2"
                       onClick={() => {
                         onGpuPopoverChange(false)
-                        onShowReinstallConfirm('coqui', 'directml')
+                        onShowReinstallConfirm(provider, 'directml')
                       }}
                     >
                       <Zap className="h-3.5 w-3.5 text-red-500" />
@@ -262,7 +271,7 @@ export function TTSModelPanel({
                       className="w-full flex items-center gap-2 text-xs p-2 rounded border border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 transition-colors text-left cursor-pointer"
                       onClick={() => {
                         onGpuPopoverChange(false)
-                        onShowReinstallConfirm('coqui', 'mps')
+                        onShowReinstallConfirm(provider, 'mps')
                       }}
                     >
                       <Zap className="h-3.5 w-3.5 text-purple-500" />
@@ -282,19 +291,19 @@ export function TTSModelPanel({
 
         <div className="flex flex-wrap gap-2">
           <ModelChip
-            label="XTTS v2"
-            isLoaded={serverStatus?.coqui.loaded === true}
-            isLoading={isLoadingModel === 'coqui'}
+            label={chipLabel}
+            isLoaded={isLoaded}
+            isLoading={isLoadingModel === loadingKey}
             disabled={isDisabled}
             onClick={() =>
-              serverStatus?.coqui.loaded ? onUnloadModel('coqui') : onLoadModel('coqui')
+              isLoaded ? onUnloadModel(provider) : onLoadModel(provider)
             }
           />
         </div>
 
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            {serverStatus?.coqui.loaded
+            {isLoaded
               ? t.ttsPanel.modelLoadedReady
               : t.ttsPanel.loadModelToEnable}
           </span>

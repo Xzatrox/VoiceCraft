@@ -3,7 +3,8 @@ import path from 'path'
 import { exec, spawn, ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import http from 'http'
-import { getResourcesPath, getSileroPythonExecutable, getCoquiPythonExecutable } from './utils'
+import { getResourcesPath, getSileroPythonExecutable, getCoquiPythonExecutable, getQwenPythonExecutable } from './utils'
+import { getTTSServerScriptContent } from '../setup/utils'
 
 const execAsync = promisify(exec)
 
@@ -15,6 +16,7 @@ const TTS_SERVER_URL = `http://127.0.0.1:${TTS_SERVER_PORT}`
 let ttsServerProcess: ChildProcess | null = null
 let ttsServerReady = false
 let serverStarting = false // Prevent multiple simultaneous starts
+let currentServerPython: string | null = null // Track which Python the server is running with
 
 // Model load progress callback
 let modelLoadProgressCallback: ((progress: number, engine: string, language?: string) => void) | null = null
@@ -123,14 +125,37 @@ export function getTTSServerScript(): string {
   return path.join(resourcesPath, 'tts_server.py')
 }
 
-export function getTTSServerPythonExecutable(): string {
-  // Prefer Coqui's venv as it has all dependencies (including TTS module)
-  // Silero's venv doesn't have the TTS module which causes "No module named 'TTS'" error
-  const coquiExe = getCoquiPythonExecutable()
-  if (fs.existsSync(coquiExe)) {
-    return coquiExe
+export function getTTSServerPythonExecutable(preferredEngine?: 'silero' | 'coqui' | 'qwen'): string {
+  // Each engine has its own Python with potentially incompatible dependencies:
+  // - Coqui: transformers==4.39.3 + TTS module
+  // - Qwen: transformers>=5.x + Qwen2Audio classes
+  // - Silero: torch + scipy (compatible with both)
+  // When a specific engine is preferred, use its Python.
+  if (preferredEngine === 'qwen') {
+    const qwenExe = getQwenPythonExecutable()
+    if (fs.existsSync(qwenExe)) return qwenExe
   }
+  if (preferredEngine === 'coqui') {
+    const coquiExe = getCoquiPythonExecutable()
+    if (fs.existsSync(coquiExe)) return coquiExe
+  }
+  // Default: prefer Coqui (has TTS module), then Qwen, then Silero
+  const coquiExe = getCoquiPythonExecutable()
+  if (fs.existsSync(coquiExe)) return coquiExe
+  const qwenExe = getQwenPythonExecutable()
+  if (fs.existsSync(qwenExe)) return qwenExe
   return getSileroPythonExecutable()
+}
+
+// Check if the engine requires a different Python than what the server is currently running
+function engineRequiresDifferentPython(engine: 'silero' | 'coqui' | 'qwen'): boolean {
+  if (!currentServerPython) return false
+  // Coqui and Qwen have incompatible transformers versions
+  const coquiExe = getCoquiPythonExecutable()
+  const qwenExe = getQwenPythonExecutable()
+  if (engine === 'qwen' && currentServerPython === coquiExe && fs.existsSync(qwenExe)) return true
+  if (engine === 'coqui' && currentServerPython === qwenExe && fs.existsSync(coquiExe)) return true
+  return false
 }
 
 export async function waitForServer(maxAttempts: number = 60, delayMs: number = 500): Promise<boolean> {
@@ -148,11 +173,16 @@ export async function waitForServer(maxAttempts: number = 60, delayMs: number = 
   return false
 }
 
-export async function startTTSServer(): Promise<void> {
-  // Already running
+export async function startTTSServer(preferredEngine?: 'silero' | 'coqui' | 'qwen'): Promise<void> {
+  // Already running — check if we need to restart for a different engine
   if (ttsServerProcess && ttsServerReady) {
-    console.log('TTS Server already running')
-    return
+    if (preferredEngine && engineRequiresDifferentPython(preferredEngine)) {
+      console.log(`TTS Server restart needed: switching to ${preferredEngine} Python`)
+      await stopTTSServer()
+    } else {
+      console.log('TTS Server already running')
+      return
+    }
   }
 
   // Prevent multiple simultaneous starts
@@ -168,8 +198,21 @@ export async function startTTSServer(): Promise<void> {
     // Kill any orphan servers first
     await killOrphanTTSServers()
 
-    const pythonExe = getTTSServerPythonExecutable()
+    const pythonExe = getTTSServerPythonExecutable(preferredEngine)
     const serverScript = getTTSServerScript()
+
+    // Always regenerate tts_server.py to ensure it matches the current code
+    // (e.g., after adding new engine support like Qwen)
+    try {
+      const scriptContent = getTTSServerScriptContent()
+      const scriptDir = path.dirname(serverScript)
+      if (!fs.existsSync(scriptDir)) {
+        fs.mkdirSync(scriptDir, { recursive: true })
+      }
+      fs.writeFileSync(serverScript, scriptContent, 'utf-8')
+    } catch (e) {
+      console.warn('Failed to regenerate TTS server script:', e)
+    }
 
     if (!fs.existsSync(pythonExe)) {
       throw new Error('Python environment not found. Please install Silero or Coqui first.')
@@ -197,7 +240,8 @@ export async function startTTSServer(): Promise<void> {
       })
 
       const pid = ttsServerProcess.pid
-      console.log(`TTS Server process started with PID: ${pid}`)
+      currentServerPython = pythonExe
+      console.log(`TTS Server process started with PID: ${pid}, Python: ${pythonExe}`)
 
       ttsServerProcess.stdout?.on('data', (data) => {
         console.log('[TTS Server]', data.toString().trim())
@@ -274,6 +318,7 @@ export async function stopTTSServer(): Promise<void> {
   ttsServerProcess = null
   ttsServerReady = false
   serverStarting = false
+  currentServerPython = null
   console.log('TTS Server stopped')
 }
 
@@ -321,10 +366,13 @@ export async function loadTTSModel(
   setCurrentLoadingModel({ engine, language })
 
   try {
-    // Start server if not running
+    // Start or restart server with the correct Python for this engine
     const status = await getTTSServerStatus()
     if (!status.running) {
-      await startTTSServer()
+      await startTTSServer(engine)
+    } else if (engineRequiresDifferentPython(engine)) {
+      console.log(`Restarting TTS server for ${engine} engine (incompatible Python)`)
+      await startTTSServer(engine)
     }
 
     const body = JSON.stringify({ engine, language })

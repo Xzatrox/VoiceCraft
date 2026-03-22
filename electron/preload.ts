@@ -26,7 +26,7 @@ export interface VoiceInfo {
   shortName: string
   gender: 'Male' | 'Female'
   locale: string
-  provider: 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui'
+  provider: 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice' | 'qwen'
   modelPath?: string
   voiceId?: string
   isInstalled?: boolean
@@ -51,6 +51,8 @@ export interface DependencyStatus {
   coqui: boolean
   coquiAvailable: boolean
   coquiBuildToolsAvailable: boolean
+  qwen: boolean
+  qwenAvailable: boolean
   rhvoiceCore: boolean
   rhvoiceVoices: string[]
   piperVoices: {
@@ -196,6 +198,7 @@ const electronAPI = {
     running: boolean
     silero: { ru_loaded: boolean; en_loaded: boolean }
     coqui: { loaded: boolean }
+    qwen: { loaded: boolean }
     memory_gb: number
     cpu_percent: number
     device: string
@@ -210,10 +213,10 @@ const electronAPI = {
     }>
   }> => ipcRenderer.invoke('tts-server-status'),
 
-  ttsModelLoad: (engine: 'silero' | 'coqui', language?: string): Promise<{ success: boolean; memory_gb: number; error?: string }> =>
+  ttsModelLoad: (engine: 'silero' | 'coqui' | 'qwen', language?: string): Promise<{ success: boolean; memory_gb: number; error?: string }> =>
     ipcRenderer.invoke('tts-model-load', engine, language),
 
-  ttsModelUnload: (engine: 'silero' | 'coqui' | 'all', language?: string): Promise<{ success: boolean; memory_gb: number }> =>
+  ttsModelUnload: (engine: 'silero' | 'coqui' | 'qwen' | 'all', language?: string): Promise<{ success: boolean; memory_gb: number }> =>
     ipcRenderer.invoke('tts-model-unload', engine, language),
 
   ttsSetDevice: (device: string): Promise<{ success: boolean; error?: string }> =>

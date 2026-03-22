@@ -169,6 +169,7 @@ export const en: Translations = {
     toolkitInstalled: 'Toolkit installed',
     sileroSpeedup: 'Silero runs 5-10x faster on GPU',
     coquiSpeedup: 'XTTS-v2 runs 10-20x faster on GPU',
+    qwenSpeedup: 'Qwen3-TTS runs 5-10x faster on GPU',
     downloadSize: 'Download size',
   },
 

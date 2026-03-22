@@ -120,11 +120,11 @@ export function registerTTSHandlers() {
     return getTTSServerStatus()
   })
 
-  ipcMain.handle('tts-model-load', async (_event, engine: 'silero' | 'coqui', language?: string) => {
+  ipcMain.handle('tts-model-load', async (_event, engine: 'silero' | 'coqui' | 'qwen', language?: string) => {
     return loadTTSModel(engine, language)
   })
 
-  ipcMain.handle('tts-model-unload', async (_event, engine: 'silero' | 'coqui' | 'all', language?: string) => {
+  ipcMain.handle('tts-model-unload', async (_event, engine: 'silero' | 'coqui' | 'qwen' | 'all', language?: string) => {
     return unloadTTSModel(engine, language)
   })
 

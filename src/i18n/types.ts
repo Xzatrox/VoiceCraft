@@ -169,6 +169,7 @@ export interface Translations {
     toolkitInstalled: string;
     sileroSpeedup: string;
     coquiSpeedup: string;
+    qwenSpeedup: string;
     downloadSize: string;
   };
 

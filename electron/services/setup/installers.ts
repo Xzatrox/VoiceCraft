@@ -1960,6 +1960,11 @@ print("QWEN_MODEL_OK", flush=True)
       try { unlinkSync(preloadScriptPath) } catch {}
     }
 
+    // Copy TTS server script to tts_resources root
+    const ttsServerScript = getTTSServerScriptContent()
+    const ttsResourcesPath = path.dirname(qwenPath)
+    fs.writeFileSync(path.join(ttsResourcesPath, 'tts_server.py'), ttsServerScript, 'utf-8')
+
     // Save accelerator config
     saveAcceleratorConfig('qwen', accelerator)
 
