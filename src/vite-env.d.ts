@@ -80,9 +80,11 @@ interface GPUInfo {
 interface AvailableAccelerators {
   cpu: true
   cuda: GPUInfo
+  directml: GPUInfo
+  mps: GPUInfo
 }
 
-type AcceleratorType = 'cpu' | 'cuda'
+type AcceleratorType = 'cpu' | 'cuda' | 'directml' | 'mps'
 
 interface AcceleratorConfig {
   accelerator: AcceleratorType

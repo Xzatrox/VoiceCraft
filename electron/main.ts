@@ -9,6 +9,27 @@ import { registerHandlers } from './main/handlers'
 // Load environment variables from .env file
 config()
 
+// File logger — redirect console.log/error to a log file
+const logDir = app.isPackaged ? app.getPath('userData') : process.cwd()
+const logPath = path.join(logDir, 'voicecraft.log')
+try {
+  // Truncate log on startup (keep last session only)
+  fs.writeFileSync(logPath, `[${new Date().toISOString()}] VoiceCraft started\n`, 'utf-8')
+} catch { /* ignore */ }
+
+function writeLog(level: string, ...args: unknown[]) {
+  const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a, null, 2)).join(' ')
+  const line = `[${new Date().toISOString()}] [${level}] ${msg}\n`
+  try { fs.appendFileSync(logPath, line, 'utf-8') } catch { /* ignore */ }
+}
+
+const origLog = console.log
+const origError = console.error
+const origWarn = console.warn
+console.log = (...args: unknown[]) => { origLog(...args); writeLog('INFO', ...args) }
+console.error = (...args: unknown[]) => { origError(...args); writeLog('ERROR', ...args) }
+console.warn = (...args: unknown[]) => { origWarn(...args); writeLog('WARN', ...args) }
+
 app.whenReady().then(async () => {
   // Kill any orphan TTS server processes from previous crashes
   await killOrphanTTSServers()

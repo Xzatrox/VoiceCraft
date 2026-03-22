@@ -1,4 +1,4 @@
-import { Wand2, Download, Cpu, Zap, AlertTriangle, RefreshCw, ExternalLink } from 'lucide-react'
+import { Wand2, Download, Cpu, Zap, AlertTriangle, RefreshCw, ExternalLink, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { AcceleratorInfo } from '@/types'
 import { useI18n } from '@/i18n'
@@ -10,8 +10,8 @@ interface CoquiSetupProps {
   pythonAvailable: boolean
   buildToolsAvailable: boolean
   availableAccelerators: AcceleratorInfo | null
-  selectedAccelerator: 'cpu' | 'cuda'
-  onAcceleratorChange: (accelerator: 'cpu' | 'cuda') => void
+  selectedAccelerator: 'cpu' | 'cuda' | 'directml' | 'mps'
+  onAcceleratorChange: (accelerator: 'cpu' | 'cuda' | 'directml' | 'mps') => void
   onInstall: () => void
   onRefreshAccelerators: () => void
   onOpenExternal: (url: string) => void
@@ -85,7 +85,7 @@ export function CoquiSetup({
             </ul>
           </div>
 
-          {availableAccelerators?.cuda.name && (
+          {(availableAccelerators?.cuda.name || availableAccelerators?.directml.name || availableAccelerators?.mps.name) && (
             <div className="p-3 rounded-md border border-primary/30 bg-primary/5 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
                 <Zap className="h-4 w-4" />
@@ -106,20 +106,54 @@ export function CoquiSetup({
                   <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
                   <span>{t.gpu.cpuMode} (~200 MB) — {t.providers.coqui.slowGeneration}</span>
                 </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="radio"
-                    name="coquiAccelerator"
-                    checked={selectedAccelerator === 'cuda'}
-                    onChange={() => onAcceleratorChange('cuda')}
-                    className="text-primary"
-                  />
-                  <Zap className="h-3.5 w-3.5 text-green-500" />
-                  <span>{t.gpu.cudaMode} (~2.3 GB) — {t.gpu.cudaModeDescription}</span>
-                  <span className="text-muted-foreground">
-                    ({availableAccelerators.cuda.name})
-                  </span>
-                </label>
+                {availableAccelerators?.cuda.name && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="coquiAccelerator"
+                      checked={selectedAccelerator === 'cuda'}
+                      onChange={() => onAcceleratorChange('cuda')}
+                      className="text-primary"
+                    />
+                    <Zap className="h-3.5 w-3.5 text-green-500" />
+                    <span>{t.gpu.cudaMode} (~2.3 GB) — {t.gpu.cudaModeDescription}</span>
+                    <span className="text-muted-foreground">
+                      ({availableAccelerators.cuda.name})
+                    </span>
+                  </label>
+                )}
+                {availableAccelerators?.directml.name && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="coquiAccelerator"
+                      checked={selectedAccelerator === 'directml'}
+                      onChange={() => onAcceleratorChange('directml')}
+                      className="text-primary"
+                    />
+                    <Monitor className="h-3.5 w-3.5 text-red-500" />
+                    <span>{t.gpu.directmlMode} (~200 MB) — {t.gpu.directmlModeDescription}</span>
+                    <span className="text-muted-foreground">
+                      ({availableAccelerators.directml.name})
+                    </span>
+                  </label>
+                )}
+                {availableAccelerators?.mps.name && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="coquiAccelerator"
+                      checked={selectedAccelerator === 'mps'}
+                      onChange={() => onAcceleratorChange('mps')}
+                      className="text-primary"
+                    />
+                    <Zap className="h-3.5 w-3.5 text-purple-500" />
+                    <span>{t.gpu.mpsMode} (~200 MB) — {t.gpu.mpsModeDescription}</span>
+                    <span className="text-muted-foreground">
+                      ({availableAccelerators.mps.name})
+                    </span>
+                  </label>
+                )}
               </div>
             </div>
           )}

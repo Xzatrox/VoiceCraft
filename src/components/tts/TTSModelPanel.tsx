@@ -16,7 +16,7 @@ interface TTSModelPanelProps {
   onGpuPopoverChange: (open: boolean) => void
   onLoadModel: (engine: 'silero' | 'coqui', language?: string) => void
   onUnloadModel: (engine: 'silero' | 'coqui' | 'all', language?: string) => void
-  onShowReinstallConfirm: (engine: 'silero' | 'coqui', accelerator: 'cuda') => void
+  onShowReinstallConfirm: (engine: 'silero' | 'coqui', accelerator: 'cuda' | 'directml' | 'mps') => void
 }
 
 export function TTSModelPanel({
@@ -39,7 +39,7 @@ export function TTSModelPanel({
 
   const canUpgradeToGpu =
     (accelerator?.accelerator === 'cpu' || !accelerator) &&
-    (availableAccelerators?.cuda.available || availableAccelerators?.cuda.name)
+    (availableAccelerators?.cuda.available || availableAccelerators?.cuda.name || availableAccelerators?.directml.available || availableAccelerators?.directml.name || availableAccelerators?.mps.available || availableAccelerators?.mps.name)
 
   if (provider === 'silero') {
     return (
@@ -58,7 +58,7 @@ export function TTSModelPanel({
             <div className="flex items-center gap-1">
               <div
                 className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded cursor-default ${
-                  accelerator?.accelerator === 'cuda'
+                  accelerator?.accelerator === 'cuda' || accelerator?.accelerator === 'directml' || accelerator?.accelerator === 'mps'
                     ? 'bg-green-500/20 text-green-600 dark:text-green-400'
                     : 'bg-muted/50 text-muted-foreground'
                 }`}
@@ -81,21 +81,57 @@ export function TTSModelPanel({
                     <div className="text-[11px] text-muted-foreground mb-3">
                       {t.gpu.sileroSpeedup}
                     </div>
-                    <button
-                      className="w-full flex items-center gap-2 text-xs p-2 rounded border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
-                      onClick={() => {
-                        onGpuPopoverChange(false)
-                        onShowReinstallConfirm('silero', 'cuda')
-                      }}
-                    >
-                      <Zap className="h-3.5 w-3.5 text-amber-500" />
-                      <div className="flex-1">
-                        <div className="font-medium">NVIDIA CUDA</div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {availableAccelerators?.cuda.name} · ~2.5 GB
+                    {availableAccelerators?.cuda.name && (
+                      <button
+                        className="w-full flex items-center gap-2 text-xs p-2 rounded border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors text-left cursor-pointer mb-2"
+                        onClick={() => {
+                          onGpuPopoverChange(false)
+                          onShowReinstallConfirm('silero', 'cuda')
+                        }}
+                      >
+                        <Zap className="h-3.5 w-3.5 text-amber-500" />
+                        <div className="flex-1">
+                          <div className="font-medium">NVIDIA CUDA</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {availableAccelerators?.cuda.name} · ~2.5 GB
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                    )}
+                    {availableAccelerators?.directml.name && (
+                      <button
+                        className="w-full flex items-center gap-2 text-xs p-2 rounded border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 transition-colors text-left cursor-pointer mb-2"
+                        onClick={() => {
+                          onGpuPopoverChange(false)
+                          onShowReinstallConfirm('silero', 'directml')
+                        }}
+                      >
+                        <Zap className="h-3.5 w-3.5 text-red-500" />
+                        <div className="flex-1">
+                          <div className="font-medium">DirectML</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {availableAccelerators?.directml.name} · ~200 MB
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                    {availableAccelerators?.mps.name && (
+                      <button
+                        className="w-full flex items-center gap-2 text-xs p-2 rounded border border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 transition-colors text-left cursor-pointer"
+                        onClick={() => {
+                          onGpuPopoverChange(false)
+                          onShowReinstallConfirm('silero', 'mps')
+                        }}
+                      >
+                        <Zap className="h-3.5 w-3.5 text-purple-500" />
+                        <div className="flex-1">
+                          <div className="font-medium">Apple MPS</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {availableAccelerators?.mps.name} · ~200 MB
+                          </div>
+                        </div>
+                      </button>
+                    )}
                   </PopoverContent>
                 </Popover>
               )}
@@ -164,7 +200,7 @@ export function TTSModelPanel({
           <div className="flex items-center gap-1">
             <div
               className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded ${
-                accelerator?.accelerator === 'cuda'
+                accelerator?.accelerator === 'cuda' || accelerator?.accelerator === 'directml' || accelerator?.accelerator === 'mps'
                   ? 'bg-green-500/20 text-green-600 dark:text-green-400'
                   : 'bg-muted/50 text-muted-foreground'
               }`}
@@ -187,21 +223,57 @@ export function TTSModelPanel({
                   <div className="text-[11px] text-muted-foreground mb-3">
                     {t.gpu.coquiSpeedup}
                   </div>
-                  <button
-                    className="w-full flex items-center gap-2 text-xs p-2 rounded border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
-                    onClick={() => {
-                      onGpuPopoverChange(false)
-                      onShowReinstallConfirm('coqui', 'cuda')
-                    }}
-                  >
-                    <Zap className="h-3.5 w-3.5 text-amber-500" />
-                    <div className="flex-1">
-                      <div className="font-medium">NVIDIA CUDA</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {availableAccelerators?.cuda.name} · ~4.5 GB
+                  {availableAccelerators?.cuda.name && (
+                    <button
+                      className="w-full flex items-center gap-2 text-xs p-2 rounded border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors text-left cursor-pointer mb-2"
+                      onClick={() => {
+                        onGpuPopoverChange(false)
+                        onShowReinstallConfirm('coqui', 'cuda')
+                      }}
+                    >
+                      <Zap className="h-3.5 w-3.5 text-amber-500" />
+                      <div className="flex-1">
+                        <div className="font-medium">NVIDIA CUDA</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {availableAccelerators?.cuda.name} · ~4.5 GB
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                  )}
+                  {availableAccelerators?.directml.name && (
+                    <button
+                      className="w-full flex items-center gap-2 text-xs p-2 rounded border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 transition-colors text-left cursor-pointer mb-2"
+                      onClick={() => {
+                        onGpuPopoverChange(false)
+                        onShowReinstallConfirm('coqui', 'directml')
+                      }}
+                    >
+                      <Zap className="h-3.5 w-3.5 text-red-500" />
+                      <div className="flex-1">
+                        <div className="font-medium">DirectML</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {availableAccelerators?.directml.name} · ~200 MB
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                  {availableAccelerators?.mps.name && (
+                    <button
+                      className="w-full flex items-center gap-2 text-xs p-2 rounded border border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 transition-colors text-left cursor-pointer"
+                      onClick={() => {
+                        onGpuPopoverChange(false)
+                        onShowReinstallConfirm('coqui', 'mps')
+                      }}
+                    >
+                      <Zap className="h-3.5 w-3.5 text-purple-500" />
+                      <div className="flex-1">
+                        <div className="font-medium">Apple MPS</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {availableAccelerators?.mps.name} · ~200 MB
+                        </div>
+                      </div>
+                    </button>
+                  )}
                 </PopoverContent>
               </Popover>
             )}

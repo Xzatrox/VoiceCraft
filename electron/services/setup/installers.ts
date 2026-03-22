@@ -38,7 +38,17 @@ const execAsync = promisify(exec)
 // PyTorch URLs for different accelerators
 const PYTORCH_INDEX_URLS: Record<AcceleratorType, string> = {
   cpu: 'https://download.pytorch.org/whl/cpu',
-  cuda: 'https://download.pytorch.org/whl/cu124'  // CUDA 12.4 for latest PyTorch
+  cuda: 'https://download.pytorch.org/whl/cu124',  // CUDA 12.4 for latest PyTorch
+  directml: 'https://download.pytorch.org/whl/cpu',  // DirectML uses CPU torch + torch-directml package
+  mps: 'https://download.pytorch.org/whl/cpu'  // MPS uses default PyTorch (MPS backend is built-in)
+}
+
+// PyTorch versions per accelerator (DirectML requires 2.4.1 for torch-directml compatibility)
+const PYTORCH_VERSIONS: Record<AcceleratorType, { torch: string; torchaudio: string; torchvision?: string }> = {
+  cpu: { torch: '2.5.1', torchaudio: '2.5.1', torchvision: '0.20.1' },
+  cuda: { torch: '2.5.1', torchaudio: '2.5.1', torchvision: '0.20.1' },
+  directml: { torch: '2.4.1', torchaudio: '2.4.1', torchvision: '0.19.1' },
+  mps: { torch: '2.5.1', torchaudio: '2.5.1', torchvision: '0.20.1' }
 }
 
 // Get accelerator config file path for a specific accelerator
@@ -463,7 +473,7 @@ export async function installSilero(
     const targetPython = enginePython
 
     // Install PyTorch with selected accelerator
-    const acceleratorLabel = accelerator === 'cuda' ? 'CUDA' : 'CPU'
+    const acceleratorLabel = accelerator === 'cuda' ? 'CUDA' : accelerator === 'directml' ? 'DirectML' : 'CPU'
     const downloadSize = accelerator === 'cuda' ? '~2.5 GB' : '~200 MB'
     onProgress({
       stage: 'silero',
@@ -472,7 +482,8 @@ export async function installSilero(
     })
 
     // Build pip install command based on accelerator
-    const pytorchPackages = 'torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1'
+    const versions = PYTORCH_VERSIONS[accelerator]
+    const pytorchPackages = `torch==${versions.torch} torchvision==${versions.torchvision} torchaudio==${versions.torchaudio}`
     const indexUrl = PYTORCH_INDEX_URLS[accelerator]
     const extraArgs: string[] = []
 
@@ -502,6 +513,35 @@ export async function installSilero(
 
     if (!pytorchResult.success) {
       return { success: false, error: pytorchResult.error || 'Failed to install PyTorch' }
+    }
+
+    // Install torch-directml for DirectML accelerator
+    if (accelerator === 'directml') {
+      onProgress({
+        stage: 'silero',
+        progress: scaleProgress(55),
+        details: 'Installing torch-directml...'
+      })
+
+      const directmlResult = await runPipWithProgress(
+        targetPython,
+        'torch-directml',
+        {
+          timeout: 300000,
+          onProgress: (info) => {
+            const progress = scaleProgress(55 + Math.round((info.percentage || 0) * 0.05))
+            let details = 'Installing torch-directml...'
+            if (info.phase === 'downloading' && info.percentage !== undefined) {
+              details = `Downloading torch-directml: ${info.percentage}%`
+            }
+            onProgress({ stage: 'silero', progress, details })
+          }
+        }
+      )
+
+      if (!directmlResult.success) {
+        return { success: false, error: directmlResult.error || 'Failed to install torch-directml' }
+      }
     }
 
 
@@ -986,7 +1026,7 @@ export async function installCoqui(
     const targetPython = enginePython
 
     // Install PyTorch with selected accelerator - range 5% to 40%
-    const acceleratorLabel = accelerator === 'cuda' ? 'CUDA' : 'CPU'
+    const acceleratorLabel = accelerator === 'cuda' ? 'CUDA' : accelerator === 'directml' ? 'DirectML' : 'CPU'
     const pytorchSize = accelerator === 'cuda' ? '~2.3 GB' : '~200 MB'
     onProgress({
       stage: 'coqui',
@@ -995,7 +1035,8 @@ export async function installCoqui(
     })
 
     // Build pip install command based on accelerator
-    const pytorchPackages = 'torch==2.5.1 torchaudio==2.5.1'
+    const versions = PYTORCH_VERSIONS[accelerator]
+    const pytorchPackages = `torch==${versions.torch} torchaudio==${versions.torchaudio}`
     const indexUrl = PYTORCH_INDEX_URLS[accelerator]
     const extraArgs: string[] = []
 
@@ -1052,6 +1093,35 @@ export async function installCoqui(
       return {
         success: false,
         error: 'Failed to install PyTorch. Please check your internet connection and try again.'
+      }
+    }
+
+    // Install torch-directml for DirectML accelerator
+    if (accelerator === 'directml') {
+      onProgress({
+        stage: 'coqui',
+        progress: scaleProgress(38),
+        details: 'Installing torch-directml...'
+      })
+
+      const directmlResult = await runPipWithProgress(
+        targetPython,
+        'torch-directml',
+        {
+          timeout: 300000,
+          onProgress: (info) => {
+            const progress = scaleProgress(38 + Math.round((info.percentage || 0) * 0.04))
+            let details = 'Installing torch-directml...'
+            if (info.phase === 'downloading' && info.percentage !== undefined) {
+              details = `Downloading torch-directml: ${info.percentage}%`
+            }
+            onProgress({ stage: 'coqui', progress, details })
+          }
+        }
+      )
+
+      if (!directmlResult.success) {
+        return { success: false, error: directmlResult.error || 'Failed to install torch-directml' }
       }
     }
 

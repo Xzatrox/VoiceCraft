@@ -41,10 +41,20 @@ export interface AcceleratorInfo {
     toolkitMessage?: string
     toolkitUrl?: string
   }
+  directml: {
+    available: boolean
+    name?: string
+    vram?: number
+  }
+  mps: {
+    available: boolean
+    name?: string
+    vram?: number
+  }
 }
 
 export interface AcceleratorConfig {
-  accelerator: 'cpu' | 'cuda'
+  accelerator: 'cpu' | 'cuda' | 'directml' | 'mps'
   installedAt: string
   pytorchVersion?: string
 }

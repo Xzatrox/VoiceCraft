@@ -42,7 +42,8 @@ export function getSileroPythonExecutable(): string {
   const resourcesPath = getResourcesPath()
   const activeAccelerator = getActiveAccelerator('silero')
   const sileroPath = path.join(resourcesPath, `silero-${activeAccelerator}`)
-  return path.join(sileroPath, 'python', 'python.exe')
+  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
+  return path.join(sileroPath, 'python', exeName)
 }
 
 // Get path to Silero script
@@ -58,7 +59,8 @@ export function getCoquiPythonExecutable(): string {
   const resourcesPath = getResourcesPath()
   const activeAccelerator = getActiveAccelerator('coqui')
   const coquiPath = path.join(resourcesPath, `coqui-${activeAccelerator}`)
-  return path.join(coquiPath, 'python', 'python.exe')
+  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
+  return path.join(coquiPath, 'python', exeName)
 }
 
 export function getCoquiScript(): string {

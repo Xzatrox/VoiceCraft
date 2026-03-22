@@ -147,6 +147,10 @@ export interface Translations {
     cudaModeDescription: string;
     xpuMode: string;
     xpuModeDescription: string;
+    directmlMode: string;
+    directmlModeDescription: string;
+    mpsMode: string;
+    mpsModeDescription: string;
     toolkitRequired: string;
     toolkitInstalled: string;
     sileroSpeedup: string;

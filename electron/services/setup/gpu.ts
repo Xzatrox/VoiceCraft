@@ -15,6 +15,52 @@ import { installSilero, installCoqui } from './installers'
 
 const execAsync = promisify(exec)
 
+// Check for Apple Silicon GPU (MPS support)
+export async function checkAppleSiliconGPU(): Promise<GPUInfo> {
+  if (process.platform !== 'darwin') return { available: false }
+  try {
+    const { stdout } = await execAsync(
+      'sysctl -n machdep.cpu.brand_string',
+      { timeout: 5000 }
+    )
+    if (stdout.includes('Apple')) {
+      // Get chip name (e.g., "Apple M4 Pro")
+      const chipName = stdout.trim()
+      // Get total memory as proxy for unified GPU memory
+      const { stdout: memOut } = await execAsync('sysctl -n hw.memsize', { timeout: 5000 })
+      const memBytes = parseInt(memOut.trim(), 10)
+      const vram = memBytes ? Math.round(memBytes / (1024 * 1024)) : undefined
+      return { available: true, name: chipName, vram }
+    }
+  } catch {
+    // Not Apple Silicon
+  }
+  return { available: false }
+}
+
+// Check for AMD GPU (DirectML support)
+// Sorts by VRAM descending to prefer discrete GPU over integrated
+export async function checkAmdGPU(): Promise<GPUInfo> {
+  try {
+    const { stdout } = await execAsync(
+      'powershell -Command "Get-CimInstance -ClassName Win32_VideoController | Where-Object { $_.Name -like \'*AMD*\' -or $_.Name -like \'*Radeon*\' } | Sort-Object -Property AdapterRAM -Descending | Select-Object -First 1 -Property Name, AdapterRAM | ConvertTo-Json"',
+      { timeout: 15000 }
+    )
+    const data = JSON.parse(stdout.trim())
+    if (data && data.Name) {
+      const vram = data.AdapterRAM ? Math.round(data.AdapterRAM / (1024 * 1024)) : undefined
+      return {
+        available: true,
+        name: data.Name,
+        vram: vram
+      }
+    }
+  } catch {
+    // No AMD GPU found
+  }
+  return { available: false }
+}
+
 // Check for NVIDIA GPU (CUDA support)
 export async function checkNvidiaGPU(): Promise<GPUInfo> {
   try {
@@ -55,7 +101,7 @@ export async function checkNvidiaGPU(): Promise<GPUInfo> {
 
 // Get all available accelerators
 export async function getAvailableAccelerators(): Promise<AvailableAccelerators> {
-  const cuda = await checkNvidiaGPU()
+  const [cuda, amd, apple] = await Promise.all([checkNvidiaGPU(), checkAmdGPU(), checkAppleSiliconGPU()])
 
   // Check if required toolkit is installed
   const cudaToolkit = checkGPUToolkit('cuda')
@@ -64,11 +110,20 @@ export async function getAvailableAccelerators(): Promise<AvailableAccelerators>
     cpu: true,
     cuda: {
       ...cuda,
-      // Mark as unavailable if GPU is present but toolkit is missing
       available: cuda.available && cudaToolkit.available,
       toolkitMissing: cuda.available && !cudaToolkit.available,
       toolkitMessage: cudaToolkit.message,
       toolkitUrl: cudaToolkit.downloadUrl
+    },
+    directml: {
+      ...amd,
+      // DirectML doesn't require a separate toolkit — torch-directml is installed via pip
+      available: amd.available
+    },
+    mps: {
+      ...apple,
+      // MPS is built into PyTorch on macOS, no extra package needed
+      available: apple.available
     }
   }
 }

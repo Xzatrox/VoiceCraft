@@ -7,7 +7,7 @@ import { useI18n } from '@/i18n'
 
 interface ReinstallConfirmDialogProps {
   engine: 'silero' | 'coqui'
-  accelerator: 'cuda'
+  accelerator: 'cuda' | 'directml' | 'mps'
   availableAccelerators: AcceleratorInfo | null
   isCheckingToolkit: boolean
   onConfirm: () => void

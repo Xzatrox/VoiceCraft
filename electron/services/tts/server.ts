@@ -163,7 +163,8 @@ export async function startTTSServer(): Promise<void> {
 
       ttsServerProcess = spawn(pythonExe, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        detached: false // Ensure child dies with parent
+        detached: false, // Ensure child dies with parent
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
       })
 
       const pid = ttsServerProcess.pid

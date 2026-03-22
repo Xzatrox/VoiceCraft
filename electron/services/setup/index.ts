@@ -92,6 +92,7 @@ export {
 // GPU
 export {
   checkNvidiaGPU,
+  checkAmdGPU,
   getAvailableAccelerators,
   getCurrentAccelerator,
   removeSileroInstallation,

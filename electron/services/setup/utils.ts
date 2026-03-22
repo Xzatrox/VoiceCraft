@@ -610,7 +610,8 @@ def main():
     elif lang in ['en-us', 'en-gb', 'en_us', 'en_gb', 'en']:
         lang = 'en'
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "mps" if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() else "cpu"
+    # Note: Coqui XTTS-v2 does not support DirectML; use CPU as fallback
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
@@ -693,7 +694,7 @@ def apply_stress_marks(text, lang):
         return text
 
 def detect_device():
-    """Detect best available compute device. Priority: CUDA > CPU"""
+    """Detect best available compute device. Priority: CUDA > MPS > DirectML > CPU"""
     device_info = {"device": "cpu", "backend": "cpu", "gpu_name": None}
 
     # Try CUDA (NVIDIA)
@@ -707,6 +708,38 @@ def detect_device():
             return device_info
         except:
             pass
+
+    # Try MPS (Apple Silicon)
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        try:
+            import platform
+            chip = platform.processor() or "Apple Silicon"
+            print(f"MPS available: chip={chip}", file=sys.stderr)
+            device_info = {
+                "device": "mps",
+                "backend": "mps",
+                "gpu_name": chip
+            }
+            return device_info
+        except Exception as e:
+            print(f"MPS detection failed: {e}", file=sys.stderr)
+
+    # Try DirectML (AMD/Intel/NVIDIA via DirectX 12)
+    try:
+        import torch_directml
+        dml_device = torch_directml.device()
+        dml_name = torch_directml.device_name(0)
+        print(f"DirectML available: device={dml_device}, name={dml_name}", file=sys.stderr)
+        device_info = {
+            "device": str(dml_device),
+            "backend": "directml",
+            "gpu_name": dml_name
+        }
+        return device_info
+    except ImportError as e:
+        print(f"DirectML not available (import error): {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"DirectML detection failed: {e}", file=sys.stderr)
 
     return device_info
 
@@ -748,9 +781,16 @@ def load_silero_model(lang):
     model_name = 'v5_ru' if lang == 'ru' else 'v3_en'
     print(f"Loading Silero {model_name}...", file=sys.stderr)
     model, _ = torch.hub.load('snakers4/silero-models', 'silero_tts', language=lang, speaker=model_name)
-    model.to(torch.device(device))
+    # Try to use detected device, fall back to CPU if it fails
+    target_device = device
+    try:
+        model.to(torch.device(target_device))
+    except Exception as e:
+        print(f"Failed to load Silero on {target_device}: {e}. Falling back to CPU.", file=sys.stderr)
+        target_device = "cpu"
+        model.to(torch.device("cpu"))
     models["silero"][lang] = model
-    print(f"Silero {lang} loaded on {device}. Memory: {get_memory_gb():.2f} GB", file=sys.stderr)
+    print(f"Silero {lang} loaded on {target_device}. Memory: {get_memory_gb():.2f} GB", file=sys.stderr)
     # Pre-load ruaccent model when loading Russian Silero
     if lang == 'ru':
         print("Pre-loading ruaccent model...", file=sys.stderr)
@@ -772,9 +812,20 @@ def generate_silero(text, speaker, lang, rate=1.0, sr=48000):
         audio = change_speed(audio, factor)
     return audio_to_wav_bytes(audio, sr)
 
+def patch_gpt2_for_directml():
+    """Patch torch.inference_mode to no-op for DirectML compatibility.
+    DirectML cannot handle inference-mode tensors (version_counter errors)."""
+    try:
+        torch.inference_mode = lambda mode=True: torch.no_grad()
+        print("Patched torch.inference_mode for DirectML compatibility", file=sys.stderr)
+    except Exception as e:
+        print(f"Failed to patch for DirectML: {e}", file=sys.stderr)
+
 def load_coqui_model():
     global models
     print("Loading Coqui XTTS-v2...", file=sys.stderr)
+    if backend == "directml":
+        patch_gpt2_for_directml()
     from TTS.api import TTS
     models["coqui"] = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
     print(f"Coqui loaded on {device}. Memory: {get_memory_gb():.2f} GB", file=sys.stderr)

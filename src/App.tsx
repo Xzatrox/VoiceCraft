@@ -105,7 +105,7 @@ function App() {
   const [isInstallingSilero, setIsInstallingSilero] = useState(false)
   const [sileroInstallProgress, setSileroInstallProgress] = useState('')
   const [sileroInstallPercent, setSileroInstallPercent] = useState(0)
-  const [sileroInstallAccelerator, setSileroInstallAccelerator] = useState<'cpu' | 'cuda'>('cpu')
+  const [sileroInstallAccelerator, setSileroInstallAccelerator] = useState<'cpu' | 'cuda' | 'directml' | 'mps'>('cpu')
 
   // Coqui
   const [coquiInstalled, setCoquiInstalled] = useState(false)
@@ -113,7 +113,7 @@ function App() {
   const [isInstallingCoqui, setIsInstallingCoqui] = useState(false)
   const [coquiInstallProgress, setCoquiInstallProgress] = useState('')
   const [coquiInstallPercent, setCoquiInstallPercent] = useState(0)
-  const [coquiInstallAccelerator, setCoquiInstallAccelerator] = useState<'cpu' | 'cuda'>('cpu')
+  const [coquiInstallAccelerator, setCoquiInstallAccelerator] = useState<'cpu' | 'cuda' | 'directml' | 'mps'>('cpu')
 
   // Piper
   const [piperInstalled, setPiperInstalled] = useState(false)
@@ -146,7 +146,7 @@ function App() {
   const [coquiAccelerator, setCoquiAccelerator] = useState<AcceleratorConfig | null>(null)
   const [isReinstalling, setIsReinstalling] = useState<'silero' | 'coqui' | null>(null)
   const [reinstallProgress, setReinstallProgress] = useState<ReinstallProgress | null>(null)
-  const [showReinstallConfirm, setShowReinstallConfirm] = useState<{ engine: 'silero' | 'coqui'; accelerator: 'cuda' } | null>(null)
+  const [showReinstallConfirm, setShowReinstallConfirm] = useState<{ engine: 'silero' | 'coqui'; accelerator: 'cuda' | 'directml' | 'mps' } | null>(null)
   const [isCheckingToolkit, setIsCheckingToolkit] = useState(false)
   const [sileroGpuPopoverOpen, setSileroGpuPopoverOpen] = useState(false)
   const [coquiGpuPopoverOpen, setCoquiGpuPopoverOpen] = useState(false)
@@ -661,7 +661,7 @@ function App() {
     }
   }
 
-  const handleReinstallWithAccelerator = async (engine: 'silero' | 'coqui', accelerator: 'cuda') => {
+  const handleReinstallWithAccelerator = async (engine: 'silero' | 'coqui', accelerator: 'cuda' | 'directml' | 'mps') => {
     if (!window.electronAPI) return
 
     setShowReinstallConfirm(null)

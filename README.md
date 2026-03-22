@@ -13,7 +13,7 @@ Convert e-books (FB2, EPUB, TXT) to MP3 audiobooks using various Text-to-Speech 
 - **Multiple themes** - Light/dark/system theme support
 - **Multi-language UI** - English and Russian interface
 - **Auto-splitting** - large books split into parts
-- **GPU acceleration** - CUDA support for faster generation
+- **GPU acceleration** - CUDA, DirectML (AMD) and MPS (Apple Silicon) support
 
 ## TTS Providers
 
@@ -101,7 +101,7 @@ ELEVENLABS_API_KEY=your_api_key_here
 ### Prerequisites
 
 - Node.js 18+
-- Windows 10/11
+- Windows 10/11 or macOS 13+ (Apple Silicon)
 - Python 3.9+ (for Silero and Coqui)
 
 ### Quick Start
@@ -240,34 +240,42 @@ voicecraft/
 
 Silero and Coqui support hardware acceleration for faster speech generation:
 
-| Accelerator | Supported GPUs | PyTorch Size | Speed Boost |
-|-------------|----------------|--------------|-------------|
-| **CUDA**    | NVIDIA (GTX 10xx+, RTX series) | ~2.3 GB | 3-10x |
-| **Intel XPU** | Intel Arc, Iris Xe, UHD 7xx+ | ~500 MB | 2-5x |
-| **CPU**     | Any | ~200 MB | Baseline |
+| Accelerator | Supported GPUs | PyTorch Size | Speed Boost | Platform |
+|-------------|----------------|--------------|-------------|----------|
+| **CUDA**    | NVIDIA (GTX 10xx+, RTX series) | ~2.3 GB | 3-10x | Windows |
+| **DirectML** | AMD Radeon (RX 6000+, RX 7000+) | ~200 MB | 2-3x | Windows |
+| **MPS**     | Apple Silicon (M1/M2/M3/M4) | ~200 MB | 3-8x | macOS |
+| **CPU**     | Any | ~200 MB | Baseline | All |
 
 #### Enabling GPU Acceleration
 
-1. **During initial setup**: When installing Silero or Coqui, select your preferred accelerator (CUDA, Intel XPU, or CPU)
+1. **During initial setup**: When installing Silero or Coqui, select your preferred accelerator (CUDA, DirectML, MPS, or CPU)
 
 2. **Change accelerator later**: Go to Settings → TTS Setup → click "Reinstall" button next to Silero or Coqui to change the accelerator
 
 #### Requirements
 
-**For NVIDIA CUDA:**
+**For NVIDIA CUDA (Windows):**
 - NVIDIA GPU with CUDA support (GTX 10xx or newer recommended)
 - Latest NVIDIA drivers installed
+- NVIDIA CUDA Toolkit
 - Automatically detected via `nvidia-smi`
 
-**For Intel XPU:**
-- Intel Arc, Iris Xe, or UHD Graphics 7xx+
-- Latest Intel GPU drivers
-- Intel Extension for PyTorch (installed automatically)
+**For AMD DirectML (Windows):**
+- AMD Radeon GPU with DirectX 12 support
+- Latest AMD drivers installed
+- No additional toolkit required — `torch-directml` is installed via pip
+- Requires PyTorch 2.4.1 (installed automatically)
+
+**For Apple MPS (macOS):**
+- Apple Silicon Mac (M1, M2, M3, M4 or newer)
+- macOS 13 Ventura or later
+- No additional toolkit required — MPS backend is built into PyTorch
 
 #### Auto-Detection
 
 The application automatically detects available GPUs:
-- Priority order: CUDA → Intel XPU → CPU
+- Priority order: CUDA → MPS → DirectML → CPU
 - GPU name and VRAM are displayed in the setup dialog
 - If no compatible GPU is found, CPU mode is used
 
@@ -300,7 +308,18 @@ The application automatically detects available GPUs:
 - First run downloads ~2 GB model
 - GPU recommended for faster generation
 - Requires Python 3.9+
-- Check that `tts_resources/coqui/venv` exists
+- Check that `tts_resources/coqui-{accelerator}/` exists (e.g., `coqui-cpu`, `coqui-cuda`, `coqui-directml`, `coqui-mps`)
+
+### DirectML (AMD GPU) issues
+- Requires PyTorch 2.4.1 — newer versions are incompatible with `torch-directml`
+- If you see `Cannot set version_counter for inference tensor`, the `torch.inference_mode` patch may not be applied — reinstall the engine
+- Some PyTorch operations fall back to CPU silently; this is normal for DirectML
+- The `upsample_linear1d` CPU fallback warning during model loading is expected and harmless
+
+### MPS (Apple Silicon) issues
+- Requires macOS 13 Ventura or later
+- Some operations may not be supported on MPS and will fall back to CPU
+- If generation fails on MPS, try reinstalling with CPU mode as fallback
 
 ### ElevenLabs not working
 - Check that API key is set in `.env` file

@@ -65,7 +65,7 @@ export function getInstalledAccelerators(engine: 'silero' | 'coqui'): Accelerato
   const resourcesPath = getResourcesPath()
   const installed: AcceleratorType[] = []
 
-  const accelerators: AcceleratorType[] = ['cpu', 'cuda']
+  const accelerators: AcceleratorType[] = ['cpu', 'cuda', 'directml', 'mps']
   for (const acc of accelerators) {
     const enginePath = path.join(resourcesPath, `${engine}-${acc}`)
     const configPath = path.join(enginePath, 'accelerator.json')
@@ -115,7 +115,8 @@ export function getEmbeddedPythonPath(): string {
 
 // Get path to embedded Python executable (shared, for bootstrapping only)
 export function getEmbeddedPythonExe(): string {
-  return path.join(getEmbeddedPythonPath(), 'python.exe')
+  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
+  return path.join(getEmbeddedPythonPath(), exeName)
 }
 
 // Get path to Python for specific engine+accelerator (silero-cpu/python, silero-cuda/python, etc.)
@@ -128,5 +129,6 @@ export function getEnginePythonPath(engine: 'silero' | 'coqui', accelerator: Acc
 
 // Get path to Python executable for specific engine+accelerator
 export function getEnginePythonExe(engine: 'silero' | 'coqui', accelerator: AcceleratorType): string {
-  return path.join(getEnginePythonPath(engine, accelerator), 'python.exe')
+  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
+  return path.join(getEnginePythonPath(engine, accelerator), exeName)
 }
