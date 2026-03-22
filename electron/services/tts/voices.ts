@@ -295,14 +295,14 @@ export const PIPER_VOICES: Record<string, VoiceInfo[]> = {
 }
 
 // Silero voice configurations
-// Russian v5_ru has 5 speakers, English v3_en has 118 speakers (en_0 to en_117)
+// Russian v5_3_ru has 5 speakers, English v3_en has 118 speakers (en_0 to en_117)
 export const SILERO_VOICES: Record<string, VoiceInfo[]> = {
   'ru-RU': [
-    { name: 'Aidar', shortName: 'silero-aidar', gender: 'Male', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_ru/aidar' },
-    { name: 'Baya', shortName: 'silero-baya', gender: 'Female', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_ru/baya' },
-    { name: 'Kseniya', shortName: 'silero-kseniya', gender: 'Female', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_ru/kseniya' },
-    { name: 'Xenia', shortName: 'silero-xenia', gender: 'Female', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_ru/xenia' },
-    { name: 'Eugene', shortName: 'silero-eugene', gender: 'Male', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_ru/eugene' }
+    { name: 'Aidar', shortName: 'silero-aidar', gender: 'Male', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_3_ru/aidar' },
+    { name: 'Baya', shortName: 'silero-baya', gender: 'Female', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_3_ru/baya' },
+    { name: 'Kseniya', shortName: 'silero-kseniya', gender: 'Female', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_3_ru/kseniya' },
+    { name: 'Xenia', shortName: 'silero-xenia', gender: 'Female', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_3_ru/xenia' },
+    { name: 'Eugene', shortName: 'silero-eugene', gender: 'Male', locale: 'ru-RU', provider: 'silero', modelPath: 'v5_3_ru/eugene' }
   ],
   'en': [
     // Silero v3_en has 118 speakers (en_0 to en_117)

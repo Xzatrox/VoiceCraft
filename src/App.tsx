@@ -77,7 +77,7 @@ function App() {
   const [pitch, setPitch] = useState([1.0])
   const [timeStretch, setTimeStretch] = useState([1.0])
   const [sentencePause, setSentencePause] = useState([0.0])
-  const [ruaccentEnabled, setRuaccentEnabled] = useState(false)
+  const [ruaccentEnabled, setRuaccentEnabled] = useState(true)
   const [previewText, setPreviewText] = useState(() => getDefaultPreviewText('en'))
   const [settingsOpen, setSettingsOpen] = useState(false)
 
