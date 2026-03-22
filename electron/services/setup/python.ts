@@ -62,6 +62,16 @@ const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py'
 
 // Check if embedded Python is installed and working
 export function checkEmbeddedPythonInstalled(): boolean {
+  if (process.platform === 'darwin') {
+    // On macOS, check for system python3 with pip
+    try {
+      const { execSync } = require('child_process')
+      execSync('python3 --version', { timeout: 5000, stdio: 'pipe' })
+      return true
+    } catch {
+      return false
+    }
+  }
   const pythonExe = getEmbeddedPythonExe()
   const pipDir = path.join(getEmbeddedPythonPath(), 'Lib', 'site-packages', 'pip')
   return existsSync(pythonExe) && existsSync(pipDir)
@@ -71,6 +81,26 @@ export function checkEmbeddedPythonInstalled(): boolean {
 export async function installEmbeddedPython(
   onProgress: (progress: SetupProgress) => void
 ): Promise<{ success: boolean; error?: string }> {
+  if (process.platform === 'darwin') {
+    // On macOS, verify system python3 is available and has pip
+    try {
+      const { stdout } = await execAsync('python3 --version', { timeout: 5000 })
+      if (!stdout.includes('Python 3')) {
+        return { success: false, error: 'Python 3 not found. Install via: brew install python@3.11' }
+      }
+      // Ensure pip is available
+      try {
+        await execAsync('python3 -m pip --version', { timeout: 5000 })
+      } catch {
+        await execAsync('python3 -m ensurepip --upgrade', { timeout: 60000 })
+      }
+      onProgress({ stage: 'python', progress: 100, details: 'System Python ready.' })
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: 'Python 3 not found. Install via: brew install python@3.11' }
+    }
+  }
+
   const pythonPath = getEmbeddedPythonPath()
   const pythonExe = getEmbeddedPythonExe()
   const zipPath = path.join(pythonPath, 'python-embed.zip')
@@ -214,7 +244,20 @@ export async function installEmbeddedPython(
 
 // Check if system Python is available (checks embedded first, then system)
 export async function checkPythonAvailable(): Promise<string | null> {
-  // Only use embedded Python - simpler and more reliable
+  if (process.platform === 'darwin') {
+    // On macOS, use system python3
+    try {
+      const { stdout, stderr } = await execAsync('python3 --version', { timeout: 5000 })
+      if ((stdout + stderr).includes('Python 3')) {
+        return 'python3'
+      }
+    } catch {
+      // python3 not available
+    }
+    return null
+  }
+
+  // Windows: only use embedded Python - simpler and more reliable
   if (!checkEmbeddedPythonInstalled()) {
     return null
   }
@@ -235,7 +278,21 @@ export async function checkPythonAvailable(): Promise<string | null> {
 
 // Check if Python is available (system or embedded) - returns info about which one
 export async function getPythonInfo(): Promise<{ available: boolean; path: string | null; isEmbedded: boolean; version: string | null }> {
-  // Only use embedded Python
+  if (process.platform === 'darwin') {
+    try {
+      const { stdout, stderr } = await execAsync('python3 --version', { timeout: 5000 })
+      const output = stdout + stderr
+      const match = output.match(/Python (\d+\.\d+\.\d+)/)
+      if (match) {
+        return { available: true, path: 'python3', isEmbedded: false, version: match[1] }
+      }
+    } catch {
+      // Failed
+    }
+    return { available: false, path: null, isEmbedded: false, version: null }
+  }
+
+  // Windows: only use embedded Python
   if (!checkEmbeddedPythonInstalled()) {
     return { available: false, path: null, isEmbedded: false, version: null }
   }
@@ -258,13 +315,18 @@ export async function getPythonInfo(): Promise<{ available: boolean; path: strin
 // Check if Python is installed for specific engine+accelerator
 export function checkEnginePythonInstalled(engine: 'silero' | 'coqui', accelerator: AcceleratorType): boolean {
   const pythonExe = getEnginePythonExe(engine, accelerator)
+  if (process.platform === 'darwin') {
+    // macOS venv: check for bin/python3 and lib/python*/site-packages
+    return existsSync(pythonExe)
+  }
   const pythonPath = getEnginePythonPath(engine, accelerator)
   const pipDir = path.join(pythonPath, 'Lib', 'site-packages', 'pip')
   return existsSync(pythonExe) && existsSync(pipDir)
 }
 
 // Install fresh embedded Python directly to engine-specific directory (silero-cpu/python, coqui-cuda/python, etc.)
-// This provides complete isolation for each accelerator version with clean dependencies
+// On Windows: copies embedded Python with pip
+// On macOS: creates a venv from system python3
 export async function copyPythonForEngine(
   engine: 'silero' | 'coqui',
   accelerator: AcceleratorType,
@@ -294,6 +356,56 @@ export async function copyPythonForEngine(
       // Python exists but doesn't work, need to reinstall
     }
   }
+
+  if (process.platform === 'darwin') {
+    return copyPythonForEngineMacOS(engine, accelerator, targetPath, targetExe, onProgress)
+  }
+  return copyPythonForEngineWindows(engine, accelerator, targetPath, targetExe, onProgress)
+}
+
+async function copyPythonForEngineMacOS(
+  _engine: 'silero' | 'coqui',
+  _accelerator: AcceleratorType,
+  targetPath: string,
+  targetExe: string,
+  onProgress?: (progress: SetupProgress) => void
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    onProgress?.({ stage: 'python', progress: 10, details: 'Creating Python virtual environment...' })
+
+    // Remove existing if corrupt
+    if (existsSync(targetPath)) {
+      fs.rmSync(targetPath, { recursive: true, force: true })
+    }
+
+    // Create venv from system python3
+    await execAsync(`python3 -m venv "${targetPath}"`, { timeout: 60000 })
+
+    onProgress?.({ stage: 'python', progress: 60, details: 'Upgrading pip...' })
+
+    await runCommand(targetExe, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'], { timeout: 180000 })
+
+    // Verify
+    onProgress?.({ stage: 'python', progress: 90, details: 'Verifying...' })
+    const { stdout, stderr } = await runCommand(targetExe, ['--version'], { timeout: 5000 })
+    if (!(stdout + stderr).includes('Python 3')) {
+      return { success: false, error: 'Python venv verification failed' }
+    }
+
+    onProgress?.({ stage: 'python', progress: 100, details: 'Python environment ready' })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+async function copyPythonForEngineWindows(
+  _engine: 'silero' | 'coqui',
+  _accelerator: AcceleratorType,
+  targetPath: string,
+  targetExe: string,
+  onProgress?: (progress: SetupProgress) => void
+): Promise<{ success: boolean; error?: string }> {
 
   // Use cache directory for downloads
   const cachePath = getCachePath()

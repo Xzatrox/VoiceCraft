@@ -56,7 +56,11 @@ export function getAvailableRHVoices(language: string): Array<{ name: string; ge
 }
 
 // Get list of installed SAPI voices using System.Speech (includes RHVoice)
+// Only available on Windows — returns empty on other platforms
 export async function getInstalledSAPIVoices(): Promise<string[]> {
+  if (process.platform !== 'win32') {
+    return []
+  }
   try {
     // Use System.Speech to get all installed voices (more reliable, includes RHVoice)
     const psScript = `Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.GetInstalledVoices() | ForEach-Object { Write-Output $_.VoiceInfo.Name }; $synth.Dispose()`
@@ -131,12 +135,16 @@ export async function installRHVoiceCore(
   return installRHVoice('Aleksandr', 'ru-RU', onProgress)
 }
 
-// Install a specific RHVoice voice
+// Install a specific RHVoice voice (Windows only — uses SAPI .exe installers)
 export async function installRHVoice(
   voiceName: string,
   language: string,
   onProgress: (progress: SetupProgress) => void
 ): Promise<{ success: boolean; error?: string }> {
+  if (process.platform !== 'win32') {
+    return { success: false, error: 'RHVoice is only available on Windows (requires SAPI).' }
+  }
+
   const voiceInfo = RHVOICE_VOICE_URLS[language]?.[voiceName]
 
   if (!voiceInfo) {

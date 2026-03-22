@@ -1,0 +1,6 @@
+- Any kind of assumptions is prohibited
+- Allowed only answers with 100% confidence
+- Prohibited partial investigation, only deep investigation allowed
+- Allowed only deep investigation before start any changes implementation
+- Removing existing functionality is prohibited
+- After each response, the current token estimate and budget to be presented

@@ -471,12 +471,17 @@ function splitIntoChunks(text: string, maxLength: number = 1000, language: strin
 }
 
 // ============= RHVoice (SAPI) Implementation =============
+// RHVoice uses Windows SAPI via PowerShell — only available on Windows
 async function generateSpeechWithRHVoice(
   text: string,
   voice: string,
   outputPath: string,
   options: { rate?: string } = {}
 ): Promise<void> {
+  if (process.platform !== 'win32') {
+    throw new Error('RHVoice is only available on Windows (requires SAPI).')
+  }
+
   const tempDir = path.dirname(outputPath)
   const timestamp = Date.now()
   const tempTextPath = path.join(tempDir, `temp_text_${timestamp}.txt`)

@@ -14,15 +14,16 @@
     "package": "npm run build && electron-builder",
     "electron:build": "npm run build && electron-builder",
     "electron:build:win": "npm run build && electron-builder --win",
-    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:mac": "npm run build && electron-builder --mac --arm64 && electron-builder --mac --x64",
+    "electron:build:mac:native": "npm run build && electron-builder --mac",
     "electron:build:linux": "npm run build && electron-builder --linux",
     "preview": "vite preview",
-    "setup": "powershell.exe -ExecutionPolicy Bypass -File ./scripts/setup-all.ps1",
-    "setup:silero": "powershell.exe -ExecutionPolicy Bypass -File ./scripts/setup-silero.ps1",
+    "setup": "node scripts/setup-detect.cjs",
+    "setup:silero": "node scripts/setup-detect.cjs silero",
     "release": "node scripts/release.cjs",
     "release:minor": "node scripts/release.cjs minor",
     "release:major": "node scripts/release.cjs major",
-    "clean:tts": "scripts\\clean-tts.bat",
+    "clean:tts": "node -e \"const fs=require('fs'),p=require('path');const d=p.join(process.cwd(),'tts_resources');try{fs.rmSync(d,{recursive:true,force:true});console.log('Cleaned:',d)}catch(e){console.error(e)}\"",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
@@ -99,9 +100,25 @@
       "artifactName": "${productName}.Setup.${version}.${ext}"
     },
     "mac": {
-      "target": "dmg",
-      "icon": "build/icon.png",
-      "artifactName": "${productName}-${version}-macOS.${ext}"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "dmg",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}",
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "linux": {
       "target": "AppImage",

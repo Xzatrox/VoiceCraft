@@ -77,8 +77,19 @@ function saveAcceleratorConfig(engine: 'silero' | 'coqui', accelerator: Accelera
   setActiveAccelerator(engine, accelerator)
 }
 
-// Check if Build Tools are available
+// Check if Build Tools are available (MSVC on Windows, Xcode CLI Tools on macOS)
 export async function checkBuildToolsAvailable(): Promise<boolean> {
+  if (process.platform === 'darwin') {
+    // On macOS, check for Xcode Command Line Tools
+    try {
+      await execAsync('xcode-select -p', { timeout: 5000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Windows: check for MSVC
   // Helper function to check for cl.exe in MSVC path
   const checkMsvcPath = (msvcPath: string): boolean => {
     if (existsSync(msvcPath)) {
@@ -156,10 +167,28 @@ export async function checkBuildToolsAvailable(): Promise<boolean> {
   return false
 }
 
-// Download and install Visual Studio Build Tools
+// Download and install Visual Studio Build Tools (Windows) or Xcode CLI Tools (macOS)
 export async function installBuildTools(
   onProgress: (progress: SetupProgress) => void
 ): Promise<{ success: boolean; error?: string; requiresRestart?: boolean }> {
+  if (process.platform === 'darwin') {
+    try {
+      onProgress({ stage: 'buildtools', progress: 10, details: 'Installing Xcode Command Line Tools...' })
+      await execAsync('xcode-select --install', { timeout: 600000 })
+      // xcode-select --install opens a GUI dialog; we can't track progress
+      onProgress({ stage: 'buildtools', progress: 100, details: 'Xcode Command Line Tools installation started. Follow the system dialog.' })
+      return { success: true }
+    } catch (error) {
+      // Error code 1 means already installed
+      const installed = await checkBuildToolsAvailable()
+      if (installed) {
+        onProgress({ stage: 'buildtools', progress: 100, details: 'Xcode Command Line Tools already installed.' })
+        return { success: true }
+      }
+      return { success: false, error: (error as Error).message }
+    }
+  }
+
   const resourcesPath = getResourcesPath()
   const installerPath = path.join(resourcesPath, 'vs_buildtools.exe')
 
@@ -272,9 +301,20 @@ export async function installPiper(
 ): Promise<{ success: boolean; error?: string }> {
   const piperPath = getPiperResourcesPath()
   const binPath = path.join(piperPath, 'bin')
-  const zipPath = path.join(piperPath, 'piper_windows_amd64.zip')
 
-  const piperUrl = 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip'
+  // Platform-specific download URLs
+  let piperUrl: string
+  let archiveExt: string
+  if (process.platform === 'darwin') {
+    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
+    piperUrl = `https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_${arch}.tar.gz`
+    archiveExt = 'tar.gz'
+  } else {
+    piperUrl = 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip'
+    archiveExt = 'zip'
+  }
+
+  const archivePath = path.join(piperPath, `piper_download.${archiveExt}`)
 
   try {
     onProgress({
@@ -283,7 +323,7 @@ export async function installPiper(
       details: 'Downloading Piper TTS...'
     })
 
-    await downloadFile(piperUrl, zipPath, (downloaded, total) => {
+    await downloadFile(piperUrl, archivePath, (downloaded, total) => {
       const percent = Math.round((downloaded / total) * 100)
       onProgress({
         stage: 'piper',
@@ -298,11 +338,24 @@ export async function installPiper(
       details: 'Extracting Piper TTS...'
     })
 
-    await extractZip(zipPath, binPath)
+    if (archiveExt === 'tar.gz') {
+      // Extract tar.gz on macOS
+      if (!existsSync(binPath)) {
+        mkdirSync(binPath, { recursive: true })
+      }
+      await execAsync(`tar -xzf "${archivePath}" -C "${binPath}"`, { timeout: 60000 })
+      // Make piper executable
+      const piperExe = path.join(binPath, 'piper', 'piper')
+      if (existsSync(piperExe)) {
+        await execAsync(`chmod +x "${piperExe}"`)
+      }
+    } else {
+      await extractZip(archivePath, binPath)
+    }
 
-    // Clean up zip
-    if (existsSync(zipPath)) {
-      unlinkSync(zipPath)
+    // Clean up archive
+    if (existsSync(archivePath)) {
+      unlinkSync(archivePath)
     }
 
     return { success: true }
@@ -316,6 +369,116 @@ export async function installFfmpeg(
   onProgress: (progress: SetupProgress) => void
 ): Promise<{ success: boolean; error?: string }> {
   const ffmpegPath = getFfmpegPath()
+  const ffmpegExeName = process.platform === 'darwin' ? 'ffmpeg' : 'ffmpeg.exe'
+  const ffmpegExePath = path.join(ffmpegPath, ffmpegExeName)
+
+  // Skip download if already exists
+  if (existsSync(ffmpegExePath)) {
+    return { success: true }
+  }
+
+  if (process.platform === 'darwin') {
+    return installFfmpegMacOS(ffmpegPath, ffmpegExePath, onProgress)
+  }
+  return installFfmpegWindows(ffmpegPath, ffmpegExePath, onProgress)
+}
+
+async function installFfmpegMacOS(
+  ffmpegPath: string,
+  ffmpegExePath: string,
+  onProgress: (progress: SetupProgress) => void
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!existsSync(ffmpegPath)) {
+      mkdirSync(ffmpegPath, { recursive: true })
+    }
+
+    // Check if system ffmpeg exists (e.g. from Homebrew)
+    try {
+      const { stdout } = await execAsync('which ffmpeg', { timeout: 5000 })
+      const systemFfmpeg = stdout.trim()
+      if (systemFfmpeg && existsSync(systemFfmpeg)) {
+        onProgress({ stage: 'ffmpeg', progress: 50, details: 'Copying system FFmpeg...' })
+        fs.copyFileSync(systemFfmpeg, ffmpegExePath)
+        await execAsync(`chmod +x "${ffmpegExePath}"`)
+        onProgress({ stage: 'ffmpeg', progress: 100, details: 'FFmpeg ready.' })
+        return { success: true }
+      }
+    } catch {
+      // No system ffmpeg
+    }
+
+    // Try installing via Homebrew
+    try {
+      await execAsync('which brew', { timeout: 5000 })
+      onProgress({ stage: 'ffmpeg', progress: 10, details: 'Installing FFmpeg via Homebrew...' })
+      await execAsync('brew install ffmpeg', { timeout: 600000 })
+      const { stdout } = await execAsync('which ffmpeg', { timeout: 5000 })
+      const brewFfmpeg = stdout.trim()
+      if (brewFfmpeg && existsSync(brewFfmpeg)) {
+        fs.copyFileSync(brewFfmpeg, ffmpegExePath)
+        await execAsync(`chmod +x "${ffmpegExePath}"`)
+        onProgress({ stage: 'ffmpeg', progress: 100, details: 'FFmpeg installed via Homebrew.' })
+        return { success: true }
+      }
+    } catch {
+      // Homebrew not available or install failed
+    }
+
+    // Download static binary as last resort
+    onProgress({ stage: 'ffmpeg', progress: 5, details: 'Downloading FFmpeg...' })
+    const arch = process.arch === 'arm64' ? 'arm64' : 'amd64'
+    const ffmpegUrl = `https://www.osxexperts.net/ffmpeg7${arch}.zip`
+    const zipPath = path.join(ffmpegPath, 'ffmpeg-macos.zip')
+
+    await downloadFile(ffmpegUrl, zipPath, (downloaded, total) => {
+      const percent = Math.round((downloaded / total) * 80) + 5
+      onProgress({
+        stage: 'ffmpeg',
+        progress: percent,
+        details: `Downloading FFmpeg... ${Math.round(downloaded / 1024 / 1024)}MB`
+      })
+    })
+
+    onProgress({ stage: 'ffmpeg', progress: 90, details: 'Extracting FFmpeg...' })
+    await extractZip(zipPath, ffmpegPath)
+    if (existsSync(zipPath)) unlinkSync(zipPath)
+
+    // Find the ffmpeg binary in extracted files
+    const findFfmpeg = (dir: string): string | null => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          const found = findFfmpeg(fullPath)
+          if (found) return found
+        } else if (entry.name === 'ffmpeg') {
+          return fullPath
+        }
+      }
+      return null
+    }
+
+    const foundBinary = findFfmpeg(ffmpegPath)
+    if (foundBinary && foundBinary !== ffmpegExePath) {
+      fs.copyFileSync(foundBinary, ffmpegExePath)
+    }
+    if (existsSync(ffmpegExePath)) {
+      await execAsync(`chmod +x "${ffmpegExePath}"`)
+    }
+
+    onProgress({ stage: 'ffmpeg', progress: 100, details: 'FFmpeg installed.' })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+async function installFfmpegWindows(
+  ffmpegPath: string,
+  _ffmpegExePath: string,
+  onProgress: (progress: SetupProgress) => void
+): Promise<{ success: boolean; error?: string }> {
   const zipPath = path.join(ffmpegPath, 'ffmpeg-essentials.zip')
   const tempPath = path.join(ffmpegPath, 'temp')
 
@@ -369,9 +532,9 @@ export async function installFfmpeg(
       return null
     }
 
-    const ffmpegExePath = await findFfmpeg(tempPath)
-    if (ffmpegExePath) {
-      fs.copyFileSync(ffmpegExePath, path.join(ffmpegPath, 'ffmpeg.exe'))
+    const ffmpegExeFound = await findFfmpeg(tempPath)
+    if (ffmpegExeFound) {
+      fs.copyFileSync(ffmpegExeFound, path.join(ffmpegPath, 'ffmpeg.exe'))
     }
 
     // Clean up
@@ -690,7 +853,7 @@ print("SILERO_MODEL_OK")
     try {
       await new Promise<void>((resolve, reject) => {
         const proc = spawn(targetPython, [preloadScriptPath], {
-          shell: true,
+          shell: process.platform === 'win32',
           env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
         })
 
@@ -840,7 +1003,7 @@ except Exception as e:
     try {
       await new Promise<void>((resolve) => {
         const proc = spawn(targetPython, [ruaccentPreloadPath], {
-          shell: true,
+          shell: process.platform === 'win32',
           env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
         })
 
@@ -960,15 +1123,21 @@ export async function installCoqui(
     return {
       success: false,
       needsBuildTools: true,
-      error: 'Visual Studio Build Tools are required for Coqui TTS installation.'
+      error: process.platform === 'darwin'
+        ? 'Xcode Command Line Tools are required for Coqui TTS installation.'
+        : 'Visual Studio Build Tools are required for Coqui TTS installation.'
     }
   }
 
-  const vcvarsallPath = await findVcvarsallPath()
-  if (!vcvarsallPath) {
-    return {
-      success: false,
-      error: 'Could not find vcvarsall.bat. Please reinstall Visual Studio Build Tools with C++ workload.'
+  // vcvarsall is only needed on Windows for MSVC environment
+  let vcvarsallPath: string | null = null
+  if (process.platform === 'win32') {
+    vcvarsallPath = await findVcvarsallPath()
+    if (!vcvarsallPath) {
+      return {
+        success: false,
+        error: 'Could not find vcvarsall.bat. Please reinstall Visual Studio Build Tools with C++ workload.'
+      }
     }
   }
 
@@ -1211,7 +1380,7 @@ export async function installCoqui(
       'TTS==0.22.0 flask==3.0.3 psutil==6.1.0',
       {
         timeout: 1200000,
-        msvcEnvPath: vcvarsallPath,
+        msvcEnvPath: vcvarsallPath || undefined,
         extraArgs: [],
                 onProgress: (info) => {
           const baseProgress = 55
@@ -1353,7 +1522,7 @@ print("Model downloaded successfully")
       // Run model download with progress tracking
       await new Promise<void>((resolve, reject) => {
         const proc = spawn(targetPython, [preloadScriptPath], {
-          shell: true,
+          shell: process.platform === 'win32',
           env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
         })
 

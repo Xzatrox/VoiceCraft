@@ -62,7 +62,7 @@ export async function runPipWithProgress(
       console.log(`[runPipWithProgress] Added Python paths: INCLUDE=${pythonIncludePath}, LIB=${pythonLibsPath}`)
     }
 
-    if (options.msvcEnvPath) {
+    if (options.msvcEnvPath && process.platform === 'win32') {
       // Run pip within MSVC environment
       // Set INCLUDE and LIB after vcvarsall to preserve them
       command = 'cmd.exe'
@@ -410,17 +410,22 @@ export async function downloadFile(
   })
 }
 
-// Extract ZIP file using adm-zip (more reliable than PowerShell on Windows)
+// Extract ZIP file
 export async function extractZip(zipPath: string, destPath: string): Promise<void> {
   if (!existsSync(destPath)) {
     mkdirSync(destPath, { recursive: true })
   }
 
-  // Use adm-zip for reliable extraction
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const AdmZip = require('adm-zip')
-  const zip = new AdmZip(zipPath)
-  zip.extractAllTo(destPath, true) // true = overwrite
+  if (process.platform === 'darwin') {
+    // Use system unzip on macOS (more reliable, no native module needed)
+    await execAsync(`unzip -o "${zipPath}" -d "${destPath}"`, { timeout: 120000, maxBuffer: 1024 * 1024 * 10 })
+  } else {
+    // Use adm-zip on Windows
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const AdmZip = require('adm-zip')
+    const zip = new AdmZip(zipPath)
+    zip.extractAllTo(destPath, true)
+  }
 }
 
 // Generate.py script content for Silero
@@ -938,8 +943,12 @@ if __name__ == "__main__":
 `
 }
 
-// Find vcvarsall.bat path for setting up MSVC environment
+// Find vcvarsall.bat path for setting up MSVC environment (Windows only)
 export async function findVcvarsallPath(): Promise<string | null> {
+  if (process.platform !== 'win32') {
+    return null
+  }
+
   const checkVcvarsall = (basePath: string): string | null => {
     const vcvarsallPath = path.join(basePath, 'VC', 'Auxiliary', 'Build', 'vcvarsall.bat')
     if (existsSync(vcvarsallPath)) {

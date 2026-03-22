@@ -33,7 +33,8 @@ export function getPiperResourcesPath(): string {
 // Get path to Piper executable
 export function getPiperExecutable(): string {
   const resourcesPath = getPiperResourcesPath()
-  return path.join(resourcesPath, 'bin', 'piper', 'piper.exe')
+  const exeName = process.platform === 'darwin' ? 'piper' : 'piper.exe'
+  return path.join(resourcesPath, 'bin', 'piper', exeName)
 }
 
 // Get path to Python executable for Silero
@@ -42,8 +43,10 @@ export function getSileroPythonExecutable(): string {
   const resourcesPath = getResourcesPath()
   const activeAccelerator = getActiveAccelerator('silero')
   const sileroPath = path.join(resourcesPath, `silero-${activeAccelerator}`)
-  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
-  return path.join(sileroPath, 'python', exeName)
+  if (process.platform === 'darwin') {
+    return path.join(sileroPath, 'python', 'bin', 'python3')
+  }
+  return path.join(sileroPath, 'python', 'python.exe')
 }
 
 // Get path to Silero script
@@ -59,8 +62,10 @@ export function getCoquiPythonExecutable(): string {
   const resourcesPath = getResourcesPath()
   const activeAccelerator = getActiveAccelerator('coqui')
   const coquiPath = path.join(resourcesPath, `coqui-${activeAccelerator}`)
-  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
-  return path.join(coquiPath, 'python', exeName)
+  if (process.platform === 'darwin') {
+    return path.join(coquiPath, 'python', 'bin', 'python3')
+  }
+  return path.join(coquiPath, 'python', 'python.exe')
 }
 
 export function getCoquiScript(): string {
@@ -72,5 +77,6 @@ export function getCoquiScript(): string {
 // Get path to ffmpeg executable
 export function getFfmpegExecutable(): string {
   const resourcesPath = getResourcesPath()
-  return path.join(resourcesPath, 'ffmpeg', 'ffmpeg.exe')
+  const exeName = process.platform === 'darwin' ? 'ffmpeg' : 'ffmpeg.exe'
+  return path.join(resourcesPath, 'ffmpeg', exeName)
 }

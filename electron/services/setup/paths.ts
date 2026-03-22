@@ -129,6 +129,9 @@ export function getEnginePythonPath(engine: 'silero' | 'coqui', accelerator: Acc
 
 // Get path to Python executable for specific engine+accelerator
 export function getEnginePythonExe(engine: 'silero' | 'coqui', accelerator: AcceleratorType): string {
-  const exeName = process.platform === 'darwin' ? 'python3' : 'python.exe'
-  return path.join(getEnginePythonPath(engine, accelerator), exeName)
+  if (process.platform === 'darwin') {
+    // macOS venv structure: python/bin/python3
+    return path.join(getEnginePythonPath(engine, accelerator), 'bin', 'python3')
+  }
+  return path.join(getEnginePythonPath(engine, accelerator), 'python.exe')
 }

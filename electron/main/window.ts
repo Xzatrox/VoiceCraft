@@ -9,12 +9,15 @@ const getIsDev = () => process.env.NODE_ENV === 'development' || !app.isPackaged
 export function createWindow() {
   Menu.setApplicationMenu(null)
 
-  // Get icon path - works for both dev and production
-  // In dev: __dirname is dist-electron/main, so go up two levels to reach project root
-  // In prod: __dirname is resources/app.asar/dist-electron/main, build is at resources/build
-  const iconPath = getIsDev()
-    ? path.join(__dirname, '../../build/icon.ico')
-    : path.join(process.resourcesPath, 'build/icon.ico')
+  // Get icon path - works for both dev and production, platform-aware
+  // On macOS the app icon is set via Info.plist by electron-builder;
+  // BrowserWindow icon is only used on Windows/Linux
+  let iconPath: string | undefined
+  if (process.platform !== 'darwin') {
+    iconPath = getIsDev()
+      ? path.join(__dirname, '../../build/icon.ico')
+      : path.join(process.resourcesPath, 'build/icon.ico')
+  }
 
   // Get preload path - works for both dev and production
   // In dev: __dirname is dist-electron/main, preload is at dist-electron/preload.js

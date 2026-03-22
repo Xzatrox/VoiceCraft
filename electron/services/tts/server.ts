@@ -66,9 +66,14 @@ async function killProcessTree(pid: number): Promise<void> {
     }
   } else {
     try {
-      process.kill(-pid, 'SIGKILL') // Kill process group on Unix
+      // Kill process group on Unix (negative pid)
+      process.kill(-pid, 'SIGTERM')
+      // Give it a moment to terminate gracefully
+      await new Promise(resolve => setTimeout(resolve, 500))
+      try { process.kill(-pid, 'SIGKILL') } catch { /* already dead */ }
     } catch {
-      // Process may already be dead
+      // Process group kill failed, try single process
+      try { process.kill(pid, 'SIGKILL') } catch { /* already dead */ }
     }
   }
 }
@@ -91,6 +96,21 @@ export async function killOrphanTTSServers(): Promise<void> {
       }
     } catch {
       // No orphan processes or wmic not available
+    }
+  } else {
+    // Unix/macOS: find and kill python processes running tts_server.py
+    try {
+      const { stdout } = await execAsync("pgrep -f 'tts_server\\.py'")
+      const pids = stdout.trim().split('\n').filter(Boolean)
+      for (const pidStr of pids) {
+        const pid = parseInt(pidStr, 10)
+        if (pid && !isNaN(pid)) {
+          console.log(`Killing orphan TTS server process: ${pid}`)
+          try { process.kill(pid, 'SIGTERM') } catch { /* already dead */ }
+        }
+      }
+    } catch {
+      // No orphan processes found (pgrep returns non-zero when no match)
     }
   }
 }

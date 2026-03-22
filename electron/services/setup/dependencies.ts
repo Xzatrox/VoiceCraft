@@ -42,8 +42,12 @@ export function checkSileroInstalled(): boolean {
   // Legacy check for old 'silero' folder (without accelerator suffix)
   // This handles both old venv structure and new python folder structure
   const sileroPath = path.join(path.dirname(getSileroPath()), 'silero')
-  const venvPython = path.join(sileroPath, 'venv', 'Scripts', 'python.exe')
-  const enginePython = path.join(sileroPath, 'python', 'python.exe')
+  const venvPython = process.platform === 'darwin'
+    ? path.join(sileroPath, 'venv', 'bin', 'python3')
+    : path.join(sileroPath, 'venv', 'Scripts', 'python.exe')
+  const enginePython = process.platform === 'darwin'
+    ? path.join(sileroPath, 'python', 'bin', 'python3')
+    : path.join(sileroPath, 'python', 'python.exe')
   const generateScript = path.join(sileroPath, 'generate.py')
 
   const venvPythonExists = existsSync(venvPython)
@@ -88,8 +92,12 @@ export function checkCoquiInstalled(): boolean {
   // Legacy check for old 'coqui' folder (without accelerator suffix)
   // This handles both old venv structure and new python folder structure
   const coquiPath = path.join(path.dirname(getCoquiPath()), 'coqui')
-  const venvPython = path.join(coquiPath, 'venv', 'Scripts', 'python.exe')
-  const enginePython = path.join(coquiPath, 'python', 'python.exe')
+  const venvPython = process.platform === 'darwin'
+    ? path.join(coquiPath, 'venv', 'bin', 'python3')
+    : path.join(coquiPath, 'venv', 'Scripts', 'python.exe')
+  const enginePython = process.platform === 'darwin'
+    ? path.join(coquiPath, 'python', 'bin', 'python3')
+    : path.join(coquiPath, 'python', 'python.exe')
   const generateScript = path.join(coquiPath, 'generate.py')
 
   const venvPythonExists = existsSync(venvPython)
@@ -113,8 +121,10 @@ export function checkDependencies(): DependencyStatus {
   const piperPath = getPiperResourcesPath()
   const ffmpegPath = getFfmpegPath()
 
-  const piperExe = path.join(piperPath, 'bin', 'piper', 'piper.exe')
-  const ffmpegExe = path.join(ffmpegPath, 'ffmpeg.exe')
+  const piperExeName = process.platform === 'darwin' ? 'piper' : 'piper.exe'
+  const ffmpegExeName = process.platform === 'darwin' ? 'ffmpeg' : 'ffmpeg.exe'
+  const piperExe = path.join(piperPath, 'bin', 'piper', piperExeName)
+  const ffmpegExe = path.join(ffmpegPath, ffmpegExeName)
 
   const ruVoices = ['denis', 'dmitri', 'irina', 'ruslan']
   const enVoices = ['amy', 'lessac', 'ryan']
