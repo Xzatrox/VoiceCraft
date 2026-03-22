@@ -6,7 +6,7 @@ import type { AcceleratorInfo, ReinstallProgress } from '@/types'
 import { useI18n } from '@/i18n'
 
 interface ReinstallConfirmDialogProps {
-  engine: 'silero' | 'coqui'
+  engine: 'silero' | 'coqui' | 'qwen'
   accelerator: 'cuda' | 'directml' | 'mps'
   availableAccelerators: AcceleratorInfo | null
   isCheckingToolkit: boolean
@@ -38,7 +38,7 @@ export function ReinstallConfirmDialog({
             {t.reinstall.cudaInstallation}
           </CardTitle>
           <CardDescription>
-            {engine === 'silero' ? 'Silero TTS' : 'Coqui XTTS-v2'}
+            {engine === 'silero' ? 'Silero TTS' : engine === 'coqui' ? 'Coqui XTTS-v2' : 'Qwen TTS'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -110,7 +110,7 @@ export function ReinstallConfirmDialog({
 }
 
 interface ReinstallProgressDialogProps {
-  engine: 'silero' | 'coqui'
+  engine: 'silero' | 'coqui' | 'qwen'
   progress: ReinstallProgress | null
   onClose: () => void
 }
@@ -136,7 +136,7 @@ export function ReinstallProgressDialog({
             ) : (
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
             )}
-            {t.reinstall.title} {engine === 'silero' ? 'Silero' : 'Coqui'}
+            {t.reinstall.title} {engine === 'silero' ? 'Silero' : engine === 'coqui' ? 'Coqui' : 'Qwen'}
           </CardTitle>
           {!isComplete && !isError && (
             <CardDescription>{t.reinstall.downloadWarning.split('.')[0]}</CardDescription>

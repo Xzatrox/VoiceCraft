@@ -10,6 +10,7 @@ import { ProviderSelector } from '@/components/provider/ProviderSelector'
 import { ElevenLabsSetup } from '@/components/provider/ElevenLabsSetup'
 import { SileroSetup } from '@/components/provider/SileroSetup'
 import { CoquiSetup } from '@/components/provider/CoquiSetup'
+import { QwenSetup } from '@/components/provider/QwenSetup'
 import { PiperSetup } from '@/components/provider/PiperSetup'
 import { RHVoiceSetup } from '@/components/provider/RHVoiceSetup'
 import { TTSModelPanel } from '@/components/tts/TTSModelPanel'
@@ -115,6 +116,13 @@ function App() {
   const [coquiInstallPercent, setCoquiInstallPercent] = useState(0)
   const [coquiInstallAccelerator, setCoquiInstallAccelerator] = useState<'cpu' | 'cuda' | 'directml' | 'mps'>('cpu')
 
+  // Qwen
+  const [qwenInstalled, setQwenInstalled] = useState(false)
+  const [isInstallingQwen, setIsInstallingQwen] = useState(false)
+  const [qwenInstallProgress, setQwenInstallProgress] = useState('')
+  const [qwenInstallPercent, setQwenInstallPercent] = useState(0)
+  const [qwenInstallAccelerator, setQwenInstallAccelerator] = useState<'cpu' | 'cuda' | 'directml' | 'mps'>('cpu')
+
   // Piper
   const [piperInstalled, setPiperInstalled] = useState(false)
   const [isInstallingPiperCore, setIsInstallingPiperCore] = useState(false)
@@ -144,12 +152,14 @@ function App() {
   const [availableAccelerators, setAvailableAccelerators] = useState<AcceleratorInfo | null>(null)
   const [sileroAccelerator, setSileroAccelerator] = useState<AcceleratorConfig | null>(null)
   const [coquiAccelerator, setCoquiAccelerator] = useState<AcceleratorConfig | null>(null)
-  const [isReinstalling, setIsReinstalling] = useState<'silero' | 'coqui' | null>(null)
+  const [qwenAccelerator, setQwenAccelerator] = useState<AcceleratorConfig | null>(null)
+  const [isReinstalling, setIsReinstalling] = useState<'silero' | 'coqui' | 'qwen' | null>(null)
   const [reinstallProgress, setReinstallProgress] = useState<ReinstallProgress | null>(null)
-  const [showReinstallConfirm, setShowReinstallConfirm] = useState<{ engine: 'silero' | 'coqui'; accelerator: 'cuda' | 'directml' | 'mps' } | null>(null)
+  const [showReinstallConfirm, setShowReinstallConfirm] = useState<{ engine: 'silero' | 'coqui' | 'qwen'; accelerator: 'cuda' | 'directml' | 'mps' } | null>(null)
   const [isCheckingToolkit, setIsCheckingToolkit] = useState(false)
   const [sileroGpuPopoverOpen, setSileroGpuPopoverOpen] = useState(false)
   const [coquiGpuPopoverOpen, setCoquiGpuPopoverOpen] = useState(false)
+  const [qwenGpuPopoverOpen, setQwenGpuPopoverOpen] = useState(false)
 
   // ==================== TTS SERVER STATE ====================
   const [ttsServerStatus, setTtsServerStatus] = useState<TTSServerStatus | null>(null)
@@ -244,8 +254,9 @@ function App() {
         const deps = await window.electronAPI.checkDependenciesAsync()
         setSileroInstalled(deps.silero)
         setCoquiInstalled(deps.coqui)
+        setQwenInstalled(deps.qwen)
         setCoquiBuildToolsAvailable(deps.coquiBuildToolsAvailable)
-        setPythonAvailable(deps.sileroAvailable || deps.coquiAvailable)
+        setPythonAvailable(deps.sileroAvailable || deps.coquiAvailable || deps.qwenAvailable)
         setPiperInstalled(deps.piper)
         setRhvoiceCoreInstalled(deps.rhvoiceCore)
 
@@ -259,6 +270,10 @@ function App() {
         if (deps.coqui) {
           const coquiAcc = await window.electronAPI.getCurrentCoquiAccelerator()
           setCoquiAccelerator(coquiAcc)
+        }
+        if (deps.qwen) {
+          const qwenAcc = await window.electronAPI.getCurrentQwenAccelerator()
+          setQwenAccelerator(qwenAcc)
         }
       } catch (err) {
         console.error('Failed to check provider status:', err)
@@ -300,7 +315,7 @@ function App() {
       }
     }
     loadVoices()
-  }, [language, needsSetup, sileroInstalled, coquiInstalled, rhvoiceCoreInstalled, piperInstalled])
+  }, [language, needsSetup, sileroInstalled, coquiInstalled, qwenInstalled, rhvoiceCoreInstalled, piperInstalled])
 
   // Select default voice when provider changes
   useEffect(() => {
@@ -354,12 +369,13 @@ function App() {
   // Refresh server status periodically
   useEffect(() => {
     if ((selectedProvider === 'silero' && sileroInstalled) ||
-        (selectedProvider === 'coqui' && coquiInstalled)) {
+        (selectedProvider === 'coqui' && coquiInstalled) ||
+        (selectedProvider === 'qwen' && qwenInstalled)) {
       refreshServerStatus()
       const interval = setInterval(refreshServerStatus, 5000)
       return () => clearInterval(interval)
     }
-  }, [selectedProvider, sileroInstalled, coquiInstalled])
+  }, [selectedProvider, sileroInstalled, coquiInstalled, qwenInstalled])
 
   // ==================== HANDLERS ====================
   const refreshServerStatus = async () => {
@@ -621,7 +637,7 @@ function App() {
     setEditingCustomVoice(null)
   }
 
-  const handleLoadModel = async (engine: 'silero' | 'coqui', language?: string) => {
+  const handleLoadModel = async (engine: 'silero' | 'coqui' | 'qwen', language?: string) => {
     if (!window.electronAPI) return
     const loadKey = language ? `${engine}-${language}` : engine
     setIsLoadingModel(loadKey)
@@ -640,7 +656,7 @@ function App() {
     }
   }
 
-  const handleUnloadModel = async (engine: 'silero' | 'coqui' | 'all', language?: string) => {
+  const handleUnloadModel = async (engine: 'silero' | 'coqui' | 'qwen' | 'all', language?: string) => {
     if (!window.electronAPI) return
     const loadKey = language ? `${engine}-${language}` : engine
     setIsLoadingModel(loadKey)
@@ -649,7 +665,7 @@ function App() {
       const status = await window.electronAPI.ttsServerStatus()
       updateDeviceState(status)
 
-      const hasLoadedModels = status.silero.ru_loaded || status.silero.en_loaded || status.coqui.loaded
+      const hasLoadedModels = status.silero.ru_loaded || status.silero.en_loaded || status.coqui.loaded || status.qwen?.loaded
       if (status.running && !hasLoadedModels) {
         await window.electronAPI.ttsServerStop()
         setTtsServerStatus(prev => prev ? { ...prev, running: false } : null)
@@ -661,7 +677,7 @@ function App() {
     }
   }
 
-  const handleReinstallWithAccelerator = async (engine: 'silero' | 'coqui', accelerator: 'cuda' | 'directml' | 'mps') => {
+  const handleReinstallWithAccelerator = async (engine: 'silero' | 'coqui' | 'qwen', accelerator: 'cuda' | 'directml' | 'mps') => {
     if (!window.electronAPI) return
 
     setShowReinstallConfirm(null)
@@ -675,17 +691,23 @@ function App() {
     try {
       const result = engine === 'silero'
         ? await window.electronAPI.reinstallSileroWithAccelerator(accelerator)
-        : await window.electronAPI.reinstallCoquiWithAccelerator(accelerator)
+        : engine === 'coqui'
+        ? await window.electronAPI.reinstallCoquiWithAccelerator(accelerator)
+        : await window.electronAPI.reinstallQwenWithAccelerator(accelerator)
 
       if (result.success) {
         const newAcc = engine === 'silero'
           ? await window.electronAPI.getCurrentSileroAccelerator()
-          : await window.electronAPI.getCurrentCoquiAccelerator()
+          : engine === 'coqui'
+          ? await window.electronAPI.getCurrentCoquiAccelerator()
+          : await window.electronAPI.getCurrentQwenAccelerator()
 
         if (engine === 'silero') {
           setSileroAccelerator(newAcc)
-        } else {
+        } else if (engine === 'coqui') {
           setCoquiAccelerator(newAcc)
+        } else {
+          setQwenAccelerator(newAcc)
         }
 
         await window.electronAPI.ttsServerStart()
@@ -778,6 +800,36 @@ function App() {
       setIsInstallingCoqui(false)
       setCoquiInstallProgress('')
       setCoquiInstallPercent(0)
+      unsubscribe()
+    }
+  }
+
+  const handleInstallQwen = async () => {
+    if (!window.electronAPI) return
+    setIsInstallingQwen(true)
+    setQwenInstallProgress('Starting installation...')
+    setQwenInstallPercent(0)
+
+    const unsubscribe = window.electronAPI.onSetupProgress(({ progress, details }) => {
+      setQwenInstallProgress(details)
+      setQwenInstallPercent(progress)
+    })
+
+    try {
+      const result = await window.electronAPI.installQwen(qwenInstallAccelerator)
+      if (result.success) {
+        setQwenInstalled(true)
+        const acc = await window.electronAPI.getCurrentQwenAccelerator()
+        setQwenAccelerator(acc)
+      } else {
+        setError(result.error || 'Qwen installation failed')
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setIsInstallingQwen(false)
+      setQwenInstallProgress('')
+      setQwenInstallPercent(0)
       unsubscribe()
     }
   }
@@ -920,6 +972,7 @@ function App() {
     switch (selectedProvider) {
       case 'silero': return sileroInstalled
       case 'coqui': return coquiInstalled
+      case 'qwen': return qwenInstalled
       case 'elevenlabs': return hasApiKey
       case 'piper': return piperInstalled
       case 'rhvoice': return rhvoiceCoreInstalled
@@ -935,7 +988,7 @@ function App() {
   })()
 
   const isAnyInstallationInProgress =
-    isInstallingSilero || isInstallingCoqui || isInstallingPiperCore ||
+    isInstallingSilero || isInstallingCoqui || isInstallingQwen || isInstallingPiperCore ||
     isInstallingRHVoiceCore || installingVoice !== null || installingRHVoice !== null
 
   const isModelLoadedForLanguage = (() => {
@@ -947,6 +1000,9 @@ function App() {
     }
     if (selectedProvider === 'coqui') {
       return ttsServerStatus?.coqui.loaded === true
+    }
+    if (selectedProvider === 'qwen') {
+      return ttsServerStatus?.qwen?.loaded === true
     }
     return true
   })()
@@ -1073,20 +1129,37 @@ function App() {
                   />
                 )}
 
+                {/* Qwen Setup */}
+                {selectedProvider === 'qwen' && !qwenInstalled && (
+                  <QwenSetup
+                    isInstalling={isInstallingQwen}
+                    installProgress={qwenInstallProgress}
+                    installPercent={qwenInstallPercent}
+                    pythonAvailable={pythonAvailable}
+                    availableAccelerators={availableAccelerators}
+                    selectedAccelerator={qwenInstallAccelerator}
+                    onAcceleratorChange={setQwenInstallAccelerator}
+                    onInstall={handleInstallQwen}
+                    onRefreshAccelerators={refreshAccelerators}
+                    onOpenExternal={(url) => window.electronAPI.openExternal(url)}
+                  />
+                )}
+
                 {/* TTS Model Panel */}
                 {((selectedProvider === 'silero' && sileroInstalled) ||
-                  (selectedProvider === 'coqui' && coquiInstalled)) && (
+                  (selectedProvider === 'coqui' && coquiInstalled) ||
+                  (selectedProvider === 'qwen' && qwenInstalled)) && (
                   <TTSModelPanel
-                    provider={selectedProvider as 'silero' | 'coqui'}
+                    provider={selectedProvider as 'silero' | 'coqui' | 'qwen'}
                     serverStatus={ttsServerStatus}
-                    accelerator={selectedProvider === 'silero' ? sileroAccelerator : coquiAccelerator}
+                    accelerator={selectedProvider === 'silero' ? sileroAccelerator : selectedProvider === 'coqui' ? coquiAccelerator : qwenAccelerator}
                     availableAccelerators={availableAccelerators}
                     isLoadingModel={isLoadingModel}
                     modelLoadProgress={modelLoadProgress}
                     isAnyInstalling={isAnyInstallationInProgress}
                     isReinstalling={isReinstalling !== null}
-                    gpuPopoverOpen={selectedProvider === 'silero' ? sileroGpuPopoverOpen : coquiGpuPopoverOpen}
-                    onGpuPopoverChange={selectedProvider === 'silero' ? setSileroGpuPopoverOpen : setCoquiGpuPopoverOpen}
+                    gpuPopoverOpen={selectedProvider === 'silero' ? sileroGpuPopoverOpen : selectedProvider === 'coqui' ? coquiGpuPopoverOpen : qwenGpuPopoverOpen}
+                    onGpuPopoverChange={selectedProvider === 'silero' ? setSileroGpuPopoverOpen : selectedProvider === 'coqui' ? setCoquiGpuPopoverOpen : setQwenGpuPopoverOpen}
                     onLoadModel={handleLoadModel}
                     onUnloadModel={handleUnloadModel}
                     onShowReinstallConfirm={(engine, acc) => setShowReinstallConfirm({ engine, accelerator: acc })}

@@ -4,7 +4,7 @@ import type { TTSServerStatus, AcceleratorConfig, AcceleratorInfo } from '@/type
 import { useI18n } from '@/i18n'
 
 interface TTSModelPanelProps {
-  provider: 'silero' | 'coqui'
+  provider: 'silero' | 'coqui' | 'qwen'
   serverStatus: TTSServerStatus | null
   accelerator: AcceleratorConfig | null
   availableAccelerators: AcceleratorInfo | null
@@ -14,9 +14,9 @@ interface TTSModelPanelProps {
   isReinstalling: boolean
   gpuPopoverOpen: boolean
   onGpuPopoverChange: (open: boolean) => void
-  onLoadModel: (engine: 'silero' | 'coqui', language?: string) => void
-  onUnloadModel: (engine: 'silero' | 'coqui' | 'all', language?: string) => void
-  onShowReinstallConfirm: (engine: 'silero' | 'coqui', accelerator: 'cuda' | 'directml' | 'mps') => void
+  onLoadModel: (engine: 'silero' | 'coqui' | 'qwen', language?: string) => void
+  onUnloadModel: (engine: 'silero' | 'coqui' | 'qwen' | 'all', language?: string) => void
+  onShowReinstallConfirm: (engine: 'silero' | 'coqui' | 'qwen', accelerator: 'cuda' | 'directml' | 'mps') => void
 }
 
 export function TTSModelPanel({

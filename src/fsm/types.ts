@@ -2,10 +2,10 @@ import type { DependencyStatus, AvailableAccelerators, AcceleratorConfig, Accele
 
 // ================== TTS PROVIDERS ==================
 
-export type TTSProvider = 'rhvoice' | 'piper' | 'silero' | 'coqui' | 'elevenlabs'
+export type TTSProvider = 'rhvoice' | 'piper' | 'silero' | 'coqui' | 'qwen' | 'elevenlabs'
 
 // Offline-совместимые провайдеры (не требуют интернет)
-export const OFFLINE_PROVIDERS: readonly TTSProvider[] = ['rhvoice', 'piper', 'silero', 'coqui']
+export const OFFLINE_PROVIDERS: readonly TTSProvider[] = ['rhvoice', 'piper', 'silero', 'coqui', 'qwen']
 // Online-only провайдеры
 export const ONLINE_ONLY_PROVIDERS: readonly TTSProvider[] = ['elevenlabs']
 
@@ -98,6 +98,7 @@ export interface ReadyState {
   currentAccelerators: {
     silero: AcceleratorConfig | null
     coqui: AcceleratorConfig | null
+    qwen: AcceleratorConfig | null
   }
   isOnline: boolean
 }
@@ -109,6 +110,7 @@ export interface OfflineState {
   currentAccelerators: {
     silero: AcceleratorConfig | null
     coqui: AcceleratorConfig | null
+    qwen: AcceleratorConfig | null
   }
 }
 
@@ -234,6 +236,7 @@ export interface FSMContext {
   currentAccelerators: {
     silero: AcceleratorConfig | null
     coqui: AcceleratorConfig | null
+    qwen: AcceleratorConfig | null
   }
   isOnline: boolean
 
@@ -254,7 +257,8 @@ export const initialContext: FSMContext = {
   accelerators: null,
   currentAccelerators: {
     silero: null,
-    coqui: null
+    coqui: null,
+    qwen: null
   },
   isOnline: true, // Optimistic default
   errorHistory: []

@@ -49,11 +49,12 @@ export function useAppFSM() {
         }
 
         // Load all dependency info
-        const [dependencies, accelerators, sileroAccelerator, coquiAccelerator] = await Promise.all([
+        const [dependencies, accelerators, sileroAccelerator, coquiAccelerator, qwenAccelerator] = await Promise.all([
           window.electronAPI.checkDependenciesAsync(),
           window.electronAPI.getAvailableAccelerators(),
           window.electronAPI.getCurrentSileroAccelerator(),
-          window.electronAPI.getCurrentCoquiAccelerator()
+          window.electronAPI.getCurrentCoquiAccelerator(),
+          window.electronAPI.getCurrentQwenAccelerator()
         ])
 
         dispatch({
@@ -63,7 +64,8 @@ export function useAppFSM() {
           accelerators,
           currentAccelerators: {
             silero: sileroAccelerator,
-            coqui: coquiAccelerator
+            coqui: coquiAccelerator,
+            qwen: qwenAccelerator
           },
           isOnline
         })
@@ -183,11 +185,12 @@ export function useAppFSM() {
     if (!window.electronAPI) return
 
     try {
-      const [dependencies, accelerators, sileroAccelerator, coquiAccelerator] = await Promise.all([
+      const [dependencies, accelerators, sileroAccelerator, coquiAccelerator, qwenAccelerator] = await Promise.all([
         window.electronAPI.checkDependenciesAsync(),
         window.electronAPI.getAvailableAccelerators(),
         window.electronAPI.getCurrentSileroAccelerator(),
-        window.electronAPI.getCurrentCoquiAccelerator()
+        window.electronAPI.getCurrentCoquiAccelerator(),
+        window.electronAPI.getCurrentQwenAccelerator()
       ])
 
       dispatch({
@@ -196,7 +199,8 @@ export function useAppFSM() {
         accelerators,
         currentAccelerators: {
           silero: sileroAccelerator,
-          coqui: coquiAccelerator
+          coqui: coquiAccelerator,
+          qwen: qwenAccelerator
         }
       })
     } catch (error) {
@@ -247,11 +251,12 @@ export function useAppFSM() {
     if (!window.electronAPI) return
 
     try {
-      const [dependencies, accelerators, sileroAccelerator, coquiAccelerator] = await Promise.all([
+      const [dependencies, accelerators, sileroAccelerator, coquiAccelerator, qwenAccelerator] = await Promise.all([
         window.electronAPI.checkDependenciesAsync(),
         window.electronAPI.getAvailableAccelerators(),
         window.electronAPI.getCurrentSileroAccelerator(),
-        window.electronAPI.getCurrentCoquiAccelerator()
+        window.electronAPI.getCurrentCoquiAccelerator(),
+        window.electronAPI.getCurrentQwenAccelerator()
       ])
 
       dispatch({
@@ -261,7 +266,8 @@ export function useAppFSM() {
         accelerators,
         currentAccelerators: {
           silero: sileroAccelerator,
-          coqui: coquiAccelerator
+          coqui: coquiAccelerator,
+          qwen: qwenAccelerator
         }
       })
     } catch (error) {
@@ -295,16 +301,18 @@ export function useAppFSM() {
     if (!window.electronAPI) return
 
     try {
-      const [sileroAccelerator, coquiAccelerator] = await Promise.all([
+      const [sileroAccelerator, coquiAccelerator, qwenAccelerator] = await Promise.all([
         window.electronAPI.getCurrentSileroAccelerator(),
-        window.electronAPI.getCurrentCoquiAccelerator()
+        window.electronAPI.getCurrentCoquiAccelerator(),
+        window.electronAPI.getCurrentQwenAccelerator()
       ])
 
       dispatch({
         type: 'REINSTALL_SUCCESS',
         currentAccelerators: {
           silero: sileroAccelerator,
-          coqui: coquiAccelerator
+          coqui: coquiAccelerator,
+          qwen: qwenAccelerator
         }
       })
     } catch (error) {
@@ -354,10 +362,11 @@ export function useAppFSM() {
     if (!window.electronAPI) return
 
     try {
-      const [accelerators, sileroAccelerator, coquiAccelerator] = await Promise.all([
+      const [accelerators, sileroAccelerator, coquiAccelerator, qwenAccelerator] = await Promise.all([
         window.electronAPI.getAvailableAccelerators(),
         window.electronAPI.getCurrentSileroAccelerator(),
-        window.electronAPI.getCurrentCoquiAccelerator()
+        window.electronAPI.getCurrentCoquiAccelerator(),
+        window.electronAPI.getCurrentQwenAccelerator()
       ])
 
       dispatch({
@@ -365,7 +374,8 @@ export function useAppFSM() {
         accelerators,
         currentAccelerators: {
           silero: sileroAccelerator,
-          coqui: coquiAccelerator
+          coqui: coquiAccelerator,
+          qwen: qwenAccelerator
         }
       })
     } catch (error) {
@@ -397,6 +407,8 @@ export function useAppFSM() {
         return deps.silero && deps.ffmpeg
       case 'coqui':
         return deps.coqui && deps.ffmpeg
+      case 'qwen':
+        return deps.qwen && deps.ffmpeg
       case 'elevenlabs':
         return context.isOnline
       default:
