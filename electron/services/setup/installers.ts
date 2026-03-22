@@ -44,11 +44,12 @@ const PYTORCH_INDEX_URLS: Record<AcceleratorType, string> = {
 }
 
 // PyTorch versions per accelerator (DirectML requires 2.4.1 for torch-directml compatibility)
+// MPS uses 2.10.0 to fix conv1d >65536 channels issue in XTTS-v2 HiFi-GAN decoder
 const PYTORCH_VERSIONS: Record<AcceleratorType, { torch: string; torchaudio: string; torchvision?: string }> = {
   cpu: { torch: '2.5.1', torchaudio: '2.5.1', torchvision: '0.20.1' },
   cuda: { torch: '2.5.1', torchaudio: '2.5.1', torchvision: '0.20.1' },
   directml: { torch: '2.4.1', torchaudio: '2.4.1', torchvision: '0.19.1' },
-  mps: { torch: '2.5.1', torchaudio: '2.5.1', torchvision: '0.20.1' }
+  mps: { torch: '2.10.0', torchaudio: '2.10.0', torchvision: '0.25.0' }
 }
 
 // Get accelerator config file path for a specific accelerator
@@ -716,7 +717,7 @@ export async function installSilero(
 
     const depsResult = await runPipWithProgress(
       targetPython,
-      'omegaconf==2.3.0 numpy==1.26.4 scipy>=1.13.0,<2.0 flask==3.0.3 psutil==6.1.0',
+      'setuptools<78 omegaconf==2.3.0 numpy==1.26.4 scipy>=1.13.0,<2.0 flask==3.0.3 psutil==6.1.0',
       {
         timeout: 180000,
         onProgress: (info) => {
@@ -1341,7 +1342,7 @@ export async function installCoqui(
 
     const cythonResult = await runPipWithProgress(
       targetPython,
-      'Cython==3.0.11 packaging==24.2',
+      'Cython==3.0.11 packaging==24.2 setuptools<78',
       {
         timeout: 120000,
         onProgress: (info) => {
@@ -1376,7 +1377,7 @@ export async function installCoqui(
 
     const ttsResult = await runPipWithProgress(
       targetPython,
-      'TTS==0.22.0 flask==3.0.3 psutil==6.1.0',
+      'bangla==0.0.2 TTS==0.22.0 flask==3.0.3 psutil==6.1.0',
       {
         timeout: 1200000,
         msvcEnvPath: vcvarsallPath || undefined,

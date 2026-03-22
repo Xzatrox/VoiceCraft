@@ -184,7 +184,13 @@ export async function startTTSServer(): Promise<void> {
       ttsServerProcess = spawn(pythonExe, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: false, // Ensure child dies with parent
-        env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8',
+          // MPS (Apple Silicon) doesn't support conv1d with >65536 output channels
+          // used by XTTS-v2 HiFi-GAN decoder — fall back those ops to CPU
+          PYTORCH_ENABLE_MPS_FALLBACK: '1'
+        }
       })
 
       const pid = ttsServerProcess.pid

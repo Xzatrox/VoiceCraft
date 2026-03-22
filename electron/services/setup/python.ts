@@ -218,7 +218,7 @@ export async function installEmbeddedPython(
       details: 'Upgrading pip and setuptools...'
     })
 
-    await execAsync(`"${pythonExe}" -m pip install --upgrade pip setuptools wheel --no-warn-script-location`, {
+    await execAsync(`"${pythonExe}" -m pip install --upgrade pip "setuptools<78" wheel --no-warn-script-location`, {
       timeout: 180000,
       maxBuffer: 1024 * 1024 * 10
     })
@@ -363,6 +363,39 @@ export async function copyPythonForEngine(
   return copyPythonForEngineWindows(engine, accelerator, targetPath, targetExe, onProgress)
 }
 
+// Find the best Python 3 for macOS venv creation.
+// PyTorch 2.10.0 requires Python >=3.10, TTS 0.22.0 requires <3.12 → Python 3.11 is ideal.
+async function findMacOSPython(): Promise<string> {
+  // Prefer python3.11 (Homebrew) — compatible with both PyTorch 2.10.0 and TTS 0.22.0
+  const candidates = [
+    '/opt/homebrew/bin/python3.11',
+    '/usr/local/bin/python3.11',
+    'python3.11',
+    'python3.10',
+    'python3'
+  ]
+  for (const cmd of candidates) {
+    try {
+      const { stdout, stderr } = await execAsync(`"${cmd}" --version`, { timeout: 5000 })
+      const output = stdout + stderr
+      const match = output.match(/Python 3\.(\d+)/)
+      if (match) {
+        const minor = parseInt(match[1], 10)
+        // Accept 3.10 or 3.11 (compatible with PyTorch 2.10.0 + TTS 0.22.0)
+        if (minor >= 10 && minor < 12) {
+          console.log(`Found compatible Python: ${cmd} (${output.trim()})`)
+          return cmd
+        }
+      }
+    } catch {
+      // Not available
+    }
+  }
+  // Fallback to system python3 (may be 3.9 — will work for Silero but not Coqui with PyTorch 2.10.0)
+  console.warn('No Python 3.10-3.11 found, falling back to system python3')
+  return 'python3'
+}
+
 async function copyPythonForEngineMacOS(
   _engine: 'silero' | 'coqui',
   _accelerator: AcceleratorType,
@@ -378,12 +411,15 @@ async function copyPythonForEngineMacOS(
       fs.rmSync(targetPath, { recursive: true, force: true })
     }
 
-    // Create venv from system python3
-    await execAsync(`python3 -m venv "${targetPath}"`, { timeout: 60000 })
+    // Find best Python for venv creation
+    const pythonCmd = await findMacOSPython()
+
+    // Create venv
+    await execAsync(`"${pythonCmd}" -m venv "${targetPath}"`, { timeout: 60000 })
 
     onProgress?.({ stage: 'python', progress: 60, details: 'Upgrading pip...' })
 
-    await runCommand(targetExe, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'], { timeout: 180000 })
+    await runCommand(targetExe, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools<78', 'wheel'], { timeout: 180000 })
 
     // Verify
     onProgress?.({ stage: 'python', progress: 90, details: 'Verifying...' })
@@ -584,7 +620,7 @@ async function copyPythonForEngineWindows(
       details: 'Installing setuptools...'
     })
 
-    await runCommand(targetExe, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel', '--no-warn-script-location'], {
+    await runCommand(targetExe, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools<78', 'wheel', '--no-warn-script-location'], {
       timeout: 180000
     })
 

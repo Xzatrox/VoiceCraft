@@ -649,6 +649,7 @@ import argparse, gc, io, os, sys, re, threading, time
 from pathlib import Path
 
 os.environ["COQUI_TOS_AGREED"] = "1"
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 try:
     from flask import Flask, request, jsonify, Response
