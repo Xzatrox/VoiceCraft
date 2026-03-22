@@ -5,8 +5,10 @@ import {
   getFfmpegPath,
   getSileroPath,
   getCoquiPath,
+  getQwenPath,
   getSileroPathForAccelerator,
   getCoquiPathForAccelerator,
+  getQwenPathForAccelerator,
   getInstalledAccelerators,
   getEmbeddedPythonExe,
   getEnginePythonExe
@@ -116,6 +118,56 @@ export function checkCoquiInstalled(): boolean {
   return pythonExists && scriptExists
 }
 
+// Check if Qwen is installed for a specific accelerator
+export function checkQwenInstalledForAccelerator(accelerator: AcceleratorType): boolean {
+  const qwenPath = getQwenPathForAccelerator(accelerator)
+  const enginePython = getEnginePythonExe('qwen', accelerator)
+  const generateScript = path.join(qwenPath, 'generate.py')
+  const configFile = path.join(qwenPath, 'accelerator.json')
+
+  // Check if engine-specific Python exists
+  const pythonExists = existsSync(enginePython)
+  const scriptExists = existsSync(generateScript)
+  const configExists = existsSync(configFile)
+
+  return pythonExists && scriptExists && configExists
+}
+
+// Check if Qwen is set up and working (any accelerator version)
+export function checkQwenInstalled(): boolean {
+  // Check if any version is installed
+  const installedAccelerators = getInstalledAccelerators('qwen')
+  if (installedAccelerators.length > 0) {
+    return true
+  }
+
+  // Legacy check for old 'qwen' folder (without accelerator suffix)
+  // This handles both old venv structure and new python folder structure
+  const qwenPath = path.join(path.dirname(getQwenPath()), 'qwen')
+  const venvPython = process.platform === 'darwin'
+    ? path.join(qwenPath, 'venv', 'bin', 'python3')
+    : path.join(qwenPath, 'venv', 'Scripts', 'python.exe')
+  const enginePython = process.platform === 'darwin'
+    ? path.join(qwenPath, 'python', 'bin', 'python3')
+    : path.join(qwenPath, 'python', 'python.exe')
+  const generateScript = path.join(qwenPath, 'generate.py')
+
+  const venvPythonExists = existsSync(venvPython)
+  const enginePythonExists = existsSync(enginePython)
+  const pythonExists = venvPythonExists || enginePythonExists
+  const scriptExists = existsSync(generateScript)
+
+  console.log('Qwen check:', {
+    installedAccelerators,
+    legacyPath: qwenPath,
+    venvPythonExists,
+    enginePythonExists,
+    scriptExists
+  })
+
+  return pythonExists && scriptExists
+}
+
 // Check which dependencies are installed
 export function checkDependencies(): DependencyStatus {
   const piperPath = getPiperResourcesPath()
@@ -156,6 +208,9 @@ export function checkDependencies(): DependencyStatus {
   // Check Coqui
   const coquiInstalled = checkCoquiInstalled()
 
+  // Check Qwen
+  const qwenInstalled = checkQwenInstalled()
+
   return {
     piper: existsSync(piperExe),
     ffmpeg: existsSync(ffmpegExe),
@@ -164,6 +219,8 @@ export function checkDependencies(): DependencyStatus {
     coqui: coquiInstalled,
     coquiAvailable: false, // Will be set by async check
     coquiBuildToolsAvailable: false, // Will be set by async check
+    qwen: qwenInstalled,
+    qwenAvailable: false, // Will be set by async check
     rhvoiceCore: false, // Will be set by async check
     rhvoiceVoices: [], // Will be set by async check
     piperVoices: {
@@ -186,6 +243,7 @@ export async function checkDependenciesAsync(): Promise<DependencyStatus> {
   const pythonCmd = await checkPythonAvailable()
   status.sileroAvailable = pythonCmd !== null
   status.coquiAvailable = pythonCmd !== null
+  status.qwenAvailable = pythonCmd !== null
 
   // Check Build Tools for Coqui
   status.coquiBuildToolsAvailable = await checkBuildToolsAvailable()

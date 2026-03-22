@@ -8,6 +8,7 @@ import {
   SetupProgress,
   installSilero,
   installCoqui,
+  installQwen,
   checkPythonAvailable,
   installPiperVoice,
   installRHVoiceCore,
@@ -26,6 +27,7 @@ import {
   getCurrentAccelerator,
   reinstallSileroWithAccelerator,
   reinstallCoquiWithAccelerator,
+  reinstallQwenWithAccelerator,
   AcceleratorType,
   ReinstallProgress
 } from '../../services/setup'
@@ -88,6 +90,17 @@ export function registerSetupHandlers() {
     }
   })
 
+  ipcMain.handle('install-qwen', async (event, accelerator: AcceleratorType = 'cpu') => {
+    try {
+      const result = await installQwen((progress) => {
+        event.sender.send('setup-progress', progress)
+      }, accelerator)
+      return result
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
   ipcMain.handle('check-build-tools', async () => {
     try {
       return await checkBuildToolsAvailable()
@@ -142,6 +155,10 @@ export function registerSetupHandlers() {
     return getCurrentAccelerator('coqui')
   })
 
+  ipcMain.handle('get-current-qwen-accelerator', async () => {
+    return getCurrentAccelerator('qwen')
+  })
+
   ipcMain.handle('reinstall-silero-with-accelerator', async (event, accelerator: AcceleratorType) => {
     try {
       // Stop TTS server first
@@ -162,6 +179,20 @@ export function registerSetupHandlers() {
       await stopTTSServer()
 
       const result = await reinstallCoquiWithAccelerator(accelerator, (progress: ReinstallProgress) => {
+        event.sender.send('reinstall-progress', progress)
+      })
+      return result
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('reinstall-qwen-with-accelerator', async (event, accelerator: AcceleratorType) => {
+    try {
+      // Stop TTS server first
+      await stopTTSServer()
+
+      const result = await reinstallQwenWithAccelerator(accelerator, (progress: ReinstallProgress) => {
         event.sender.send('reinstall-progress', progress)
       })
       return result

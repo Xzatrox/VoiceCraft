@@ -134,6 +134,20 @@ export const ru: Translations = {
       apiKeyPlaceholder: 'Введите ваш API ключ ElevenLabs',
       getApiKey: 'Получите API ключ на',
     },
+    qwen: {
+      name: 'Qwen3-TTS',
+      description: 'Продвинутый TTS с инструкциями от Alibaba Cloud. Поддержка русского и английского языков с естественной просодией и управлением голосом через текстовые инструкции. Контроль тембра, пола, стиля речи и эмоций. Оптимизирован для Apple Silicon (MPS), CUDA и DirectML. Высококачественная генерация аудиокниг с настраиваемыми характеристиками голоса.',
+      setupRequired: 'Требуется настройка Qwen3-TTS',
+      waitMinutes: 'Пожалуйста, подождите, это может занять несколько минут...',
+      forQwenWork: 'Для работы Qwen3-TTS будут установлены:',
+      pythonEmbedded: 'Python 3.11 (embedded) — ~25 МБ',
+      dependencies: 'Зависимости (transformers, accelerate) — ~50 МБ',
+      qwenModel: 'Модель Qwen3-TTS — ~1.2 ГБ (загружается при первом использовании)',
+      initialDownload: 'Начальная загрузка',
+      fasterOnGpu: 'в 5-10 раз быстрее',
+      instructionSupport: 'Управление голосом через инструкции',
+      instructionDescription: 'Контроль тембра, пола (мужской/женский), стиля речи и эмоций через текстовые инструкции',
+    },
   },
 
   // GPU & Acceleration

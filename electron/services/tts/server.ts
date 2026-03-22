@@ -46,6 +46,9 @@ export interface TTSServerStatus {
   coqui: {
     loaded: boolean
   }
+  qwen: {
+    loaded: boolean
+  }
   memory_gb: number
   cpu_percent: number
   device: string
@@ -282,6 +285,7 @@ export async function getTTSServerStatus(): Promise<TTSServerStatus> {
       running: true,
       silero: data.silero,
       coqui: data.coqui,
+      qwen: data.qwen || { loaded: false },
       memory_gb: data.memory_gb,
       cpu_percent: data.cpu_percent || 0,
       device: data.device,
@@ -296,6 +300,7 @@ export async function getTTSServerStatus(): Promise<TTSServerStatus> {
       running: false,
       silero: { ru_loaded: false, en_loaded: false },
       coqui: { loaded: false },
+      qwen: { loaded: false },
       memory_gb: 0,
       cpu_percent: 0,
       device: 'unknown',
@@ -309,7 +314,7 @@ export async function getTTSServerStatus(): Promise<TTSServerStatus> {
 }
 
 export async function loadTTSModel(
-  engine: 'silero' | 'coqui',
+  engine: 'silero' | 'coqui' | 'qwen',
   language?: string
 ): Promise<{ success: boolean; memory_gb: number; error?: string }> {
   // Set current loading model for progress tracking
@@ -344,7 +349,7 @@ export async function loadTTSModel(
 }
 
 export async function unloadTTSModel(
-  engine: 'silero' | 'coqui' | 'all',
+  engine: 'silero' | 'coqui' | 'qwen' | 'all',
   language?: string
 ): Promise<{ success: boolean; memory_gb: number }> {
   try {
@@ -376,7 +381,7 @@ export async function setPreferredDevice(device: string): Promise<{ success: boo
 }
 
 export async function generateViaServer(
-  engine: 'silero' | 'coqui',
+  engine: 'silero' | 'coqui' | 'qwen',
   text: string,
   speaker: string,
   language: string,
@@ -385,7 +390,8 @@ export async function generateViaServer(
   pitch?: number,
   timeStretch?: number,
   speakerWav?: string,
-  useRuaccent?: boolean
+  useRuaccent?: boolean,
+  instruction?: string
 ): Promise<void> {
   const body = JSON.stringify({
     engine,
@@ -396,11 +402,12 @@ export async function generateViaServer(
     pitch,
     time_stretch: timeStretch,
     speaker_wav: speakerWav,
-    use_ruaccent: useRuaccent
+    use_ruaccent: useRuaccent,
+    instruction
   })
 
-  // Coqui XTTS is much slower, use 3x timeout (6 minutes instead of 2)
-  const timeout = engine === 'coqui' ? 360000 : 120000
+  // Coqui XTTS and Qwen are slower, use 3x timeout (6 minutes instead of 2)
+  const timeout = (engine === 'coqui' || engine === 'qwen') ? 360000 : 120000
   const audioBuffer = await httpRequestBinary(`${TTS_SERVER_URL}/generate`, 'POST', body, timeout)
 
   // Ensure output directory exists
@@ -414,7 +421,7 @@ export async function generateViaServer(
 
 // Abortable version for preview
 export async function generateViaServerForPreview(
-  engine: 'silero' | 'coqui',
+  engine: 'silero' | 'coqui' | 'qwen',
   text: string,
   speaker: string,
   language: string,
@@ -423,7 +430,8 @@ export async function generateViaServerForPreview(
   pitch?: number,
   timeStretch?: number,
   speakerWav?: string,
-  useRuaccent?: boolean
+  useRuaccent?: boolean,
+  instruction?: string
 ): Promise<void> {
   const body = JSON.stringify({
     engine,
@@ -434,7 +442,8 @@ export async function generateViaServerForPreview(
     pitch,
     time_stretch: timeStretch,
     speaker_wav: speakerWav,
-    use_ruaccent: useRuaccent
+    use_ruaccent: useRuaccent,
+    instruction
   })
 
   const audioBuffer = await httpRequestBinaryForPreview(`${TTS_SERVER_URL}/generate`, 'POST', body)

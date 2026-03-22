@@ -263,6 +263,9 @@ const electronAPI = {
   installCoqui: (accelerator: AcceleratorType = 'cpu'): Promise<{ success: boolean; error?: string; needsBuildTools?: boolean }> =>
     ipcRenderer.invoke('install-coqui', accelerator),
 
+  installQwen: (accelerator: AcceleratorType = 'cpu'): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('install-qwen', accelerator),
+
   checkBuildTools: (): Promise<boolean> =>
     ipcRenderer.invoke('check-build-tools'),
 
@@ -284,11 +287,17 @@ const electronAPI = {
   getCurrentCoquiAccelerator: (): Promise<AcceleratorConfig | null> =>
     ipcRenderer.invoke('get-current-coqui-accelerator'),
 
+  getCurrentQwenAccelerator: (): Promise<AcceleratorConfig | null> =>
+    ipcRenderer.invoke('get-current-qwen-accelerator'),
+
   reinstallSileroWithAccelerator: (accelerator: AcceleratorType): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('reinstall-silero-with-accelerator', accelerator),
 
   reinstallCoquiWithAccelerator: (accelerator: AcceleratorType): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('reinstall-coqui-with-accelerator', accelerator),
+
+  reinstallQwenWithAccelerator: (accelerator: AcceleratorType): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('reinstall-qwen-with-accelerator', accelerator),
 
   onReinstallProgress: (callback: (data: ReinstallProgress) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: ReinstallProgress) => callback(data)

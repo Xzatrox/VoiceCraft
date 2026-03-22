@@ -313,7 +313,7 @@ export async function getPythonInfo(): Promise<{ available: boolean; path: strin
 }
 
 // Check if Python is installed for specific engine+accelerator
-export function checkEnginePythonInstalled(engine: 'silero' | 'coqui', accelerator: AcceleratorType): boolean {
+export function checkEnginePythonInstalled(engine: 'silero' | 'coqui' | 'qwen', accelerator: AcceleratorType): boolean {
   const pythonExe = getEnginePythonExe(engine, accelerator)
   if (process.platform === 'darwin') {
     // macOS venv: check for bin/python3 and lib/python*/site-packages
@@ -324,11 +324,11 @@ export function checkEnginePythonInstalled(engine: 'silero' | 'coqui', accelerat
   return existsSync(pythonExe) && existsSync(pipDir)
 }
 
-// Install fresh embedded Python directly to engine-specific directory (silero-cpu/python, coqui-cuda/python, etc.)
+// Install fresh embedded Python directly to engine-specific directory (silero-cpu/python, coqui-cuda/python, qwen-cpu/python, etc.)
 // On Windows: copies embedded Python with pip
 // On macOS: creates a venv from system python3
 export async function copyPythonForEngine(
-  engine: 'silero' | 'coqui',
+  engine: 'silero' | 'coqui' | 'qwen',
   accelerator: AcceleratorType,
   onProgress?: (progress: SetupProgress) => void
 ): Promise<{ success: boolean; error?: string }> {
@@ -397,7 +397,7 @@ async function findMacOSPython(): Promise<string> {
 }
 
 async function copyPythonForEngineMacOS(
-  _engine: 'silero' | 'coqui',
+  _engine: 'silero' | 'coqui' | 'qwen',
   _accelerator: AcceleratorType,
   targetPath: string,
   targetExe: string,
@@ -436,7 +436,7 @@ async function copyPythonForEngineMacOS(
 }
 
 async function copyPythonForEngineWindows(
-  _engine: 'silero' | 'coqui',
+  _engine: 'silero' | 'coqui' | 'qwen',
   _accelerator: AcceleratorType,
   targetPath: string,
   targetExe: string,

@@ -12,6 +12,7 @@ import {
   getCoquiPath,
   getSileroPathForAccelerator,
   getCoquiPathForAccelerator,
+  getQwenPathForAccelerator,
   setActiveAccelerator,
   getEmbeddedPythonPath,
   getEmbeddedPythonExe
@@ -53,15 +54,17 @@ const PYTORCH_VERSIONS: Record<AcceleratorType, { torch: string; torchaudio: str
 }
 
 // Get accelerator config file path for a specific accelerator
-function getAcceleratorConfigPath(engine: 'silero' | 'coqui', accelerator: AcceleratorType): string {
+function getAcceleratorConfigPath(engine: 'silero' | 'coqui' | 'qwen', accelerator: AcceleratorType): string {
   const basePath = engine === 'silero'
     ? getSileroPathForAccelerator(accelerator)
-    : getCoquiPathForAccelerator(accelerator)
+    : engine === 'coqui'
+    ? getCoquiPathForAccelerator(accelerator)
+    : getQwenPathForAccelerator(accelerator)
   return path.join(basePath, 'accelerator.json')
 }
 
 // Save accelerator config
-function saveAcceleratorConfig(engine: 'silero' | 'coqui', accelerator: AcceleratorType, pytorchVersion?: string): void {
+function saveAcceleratorConfig(engine: 'silero' | 'coqui' | 'qwen', accelerator: AcceleratorType, pytorchVersion?: string): void {
   const config: AcceleratorConfig = {
     accelerator,
     installedAt: new Date().toISOString(),
@@ -1618,6 +1621,352 @@ print("Model downloaded successfully")
       stage: 'coqui',
       progress: 100,
       details: 'Coqui TTS installation complete!'
+    })
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: (error as Error).message }
+  }
+}
+
+// Install Qwen3-TTS (instruction-based voice control)
+export async function installQwen(
+  onProgress: (progress: SetupProgress) => void,
+  accelerator: AcceleratorType = 'cpu'
+): Promise<{ success: boolean; error?: string }> {
+  // Check if required toolkit is installed for GPU acceleration
+  const toolkitCheck = checkGPUToolkit(accelerator)
+  if (!toolkitCheck.available) {
+    return { success: false, error: toolkitCheck.error }
+  }
+
+  // First ensure base embedded Python is installed
+  if (!checkEmbeddedPythonInstalled()) {
+    onProgress({
+      stage: 'qwen',
+      progress: 0,
+      details: 'Python not found. Installing embedded Python...'
+    })
+
+    const pythonResult = await installEmbeddedPython((p) => {
+      onProgress({
+        stage: 'qwen',
+        progress: Math.round(p.progress * 0.10),
+        details: p.details
+      })
+    })
+
+    if (!pythonResult.success) {
+      return {
+        success: false,
+        error: `Failed to install embedded Python: ${pythonResult.error}`
+      }
+    }
+  }
+
+  // Use accelerator-specific path (qwen-cpu, qwen-cuda, etc.)
+  const qwenPath = getQwenPathForAccelerator(accelerator)
+
+  // Import engine-specific Python functions
+  const { copyPythonForEngine, checkEnginePythonInstalled } = await import('./python')
+  const { getEnginePythonExe } = await import('./paths')
+
+  // Get engine-specific Python path
+  const enginePython = getEnginePythonExe('qwen', accelerator)
+
+  // Progress scaling
+  const scaleProgress = (p: number) => Math.min(100, Math.round(p))
+
+  try {
+    // Create qwen directory for this accelerator
+    if (!existsSync(qwenPath)) {
+      mkdirSync(qwenPath, { recursive: true })
+    }
+
+    // Copy Python to engine-specific directory if not already done
+    if (!checkEnginePythonInstalled('qwen', accelerator)) {
+      onProgress({
+        stage: 'qwen',
+        progress: scaleProgress(5),
+        details: 'Copying Python environment...'
+      })
+
+      const copyResult = await copyPythonForEngine('qwen', accelerator, (p) => {
+        onProgress({
+          stage: 'qwen',
+          progress: scaleProgress(5 + Math.round(p.progress * 0.03)),
+          details: p.details
+        })
+      })
+
+      if (!copyResult.success) {
+        return { success: false, error: copyResult.error || 'Failed to copy Python environment' }
+      }
+    } else {
+      onProgress({
+        stage: 'qwen',
+        progress: scaleProgress(8),
+        details: 'Using existing Python environment...'
+      })
+    }
+
+    const targetPython = enginePython
+
+    // Install PyTorch with selected accelerator
+    const acceleratorLabel = accelerator === 'cuda' ? 'CUDA' : accelerator === 'directml' ? 'DirectML' : accelerator === 'mps' ? 'MPS' : 'CPU'
+    const downloadSize = accelerator === 'cuda' ? '~2.5 GB' : '~200 MB'
+    onProgress({
+      stage: 'qwen',
+      progress: scaleProgress(10),
+      details: `Installing PyTorch ${acceleratorLabel} (${downloadSize})...`
+    })
+
+    // Build pip install command based on accelerator
+    const versions = PYTORCH_VERSIONS[accelerator]
+    const pytorchPackages = `torch==${versions.torch} torchaudio==${versions.torchaudio}`
+    const indexUrl = PYTORCH_INDEX_URLS[accelerator]
+    const extraArgs: string[] = []
+
+    const pytorchResult = await runPipWithProgress(
+      targetPython,
+      pytorchPackages,
+      {
+        indexUrl,
+        extraArgs,
+        timeout: accelerator === 'cpu' ? 600000 : 1800000,
+        onProgress: (info) => {
+          const progress = scaleProgress(10 + Math.round((info.percentage || 0) * 0.4))
+          let details = `Installing PyTorch ${acceleratorLabel} (${downloadSize})...`
+          if (info.phase === 'downloading' && info.downloaded !== undefined && info.total !== undefined) {
+            details = `Downloading ${info.package}: ${info.downloaded.toFixed(0)}/${info.total.toFixed(0)} MB`
+          } else if (info.phase === 'downloading' && info.percentage !== undefined) {
+            details = `Downloading ${info.package}: ${info.percentage}%`
+          } else if (info.phase === 'installing') {
+            details = `Installing PyTorch...`
+          }
+          onProgress({ stage: 'qwen', progress, details })
+        }
+      }
+    )
+
+    if (!pytorchResult.success) {
+      return { success: false, error: pytorchResult.error || 'Failed to install PyTorch' }
+    }
+
+    // Install torch-directml for DirectML accelerator
+    if (accelerator === 'directml') {
+      onProgress({
+        stage: 'qwen',
+        progress: scaleProgress(50),
+        details: 'Installing torch-directml...'
+      })
+
+      const directmlResult = await runPipWithProgress(
+        targetPython,
+        'torch-directml',
+        {
+          timeout: 300000,
+          onProgress: (info) => {
+            const progress = scaleProgress(50 + Math.round((info.percentage || 0) * 0.05))
+            let details = 'Installing torch-directml...'
+            if (info.phase === 'downloading' && info.percentage !== undefined) {
+              details = `Downloading torch-directml: ${info.percentage}%`
+            }
+            onProgress({ stage: 'qwen', progress, details })
+          }
+        }
+      )
+
+      if (!directmlResult.success) {
+        return { success: false, error: directmlResult.error || 'Failed to install torch-directml' }
+      }
+    }
+
+    // Install Qwen3-TTS dependencies
+    onProgress({
+      stage: 'qwen',
+      progress: scaleProgress(55),
+      details: 'Installing Qwen3-TTS dependencies...'
+    })
+
+    const depsResult = await runPipWithProgress(
+      targetPython,
+      'transformers>=4.37.0 accelerate>=0.26.0 soundfile>=0.12.1 flask==3.0.3 psutil==6.1.0',
+      {
+        timeout: 300000,
+        onProgress: (info) => {
+          const progress = scaleProgress(55 + Math.round((info.percentage || 0) * 0.25))
+          let details = 'Installing dependencies...'
+          if (info.phase === 'downloading' && info.downloaded !== undefined && info.total !== undefined) {
+            details = `Downloading ${info.package}: ${info.downloaded.toFixed(0)}/${info.total.toFixed(0)} MB`
+          } else if (info.phase === 'downloading' && info.percentage !== undefined) {
+            details = `Downloading ${info.package}: ${info.percentage}%`
+          }
+          onProgress({ stage: 'qwen', progress, details })
+        }
+      }
+    )
+
+    if (!depsResult.success) {
+      return { success: false, error: depsResult.error || 'Failed to install dependencies' }
+    }
+
+    // Verify installation
+    onProgress({
+      stage: 'qwen',
+      progress: scaleProgress(80),
+      details: 'Verifying installation...'
+    })
+
+    let verifyResult
+    try {
+      verifyResult = await execAsync(`"${targetPython}" -c "import torch; import transformers; print('OK')"`, { timeout: 30000 })
+    } catch (error: any) {
+      const errorMsg = error.message || error.toString()
+
+      // Check if error is due to missing CUDA runtime
+      if (accelerator === 'cuda' && (errorMsg.includes('cudart') || errorMsg.includes('cublas') || errorMsg.includes('cusparse'))) {
+        const downloadUrl = 'https://developer.nvidia.com/cuda-downloads'
+        const cudaPath = process.env.CUDA_PATH
+        const isToolkitInstalled = cudaPath && existsSync(cudaPath)
+
+        if (isToolkitInstalled) {
+          return {
+            success: false,
+            error: JSON.stringify({
+              type: 'toolkit_restart_required',
+              title: 'Computer restart required',
+              description: 'NVIDIA CUDA Toolkit is installed, but a restart is needed to activate it.',
+              steps: [
+                'Restart your computer',
+                'Try installing Qwen with CUDA acceleration again'
+              ],
+              fallbackToCpu: { engine: 'qwen' }
+            })
+          }
+        } else {
+          return {
+            success: false,
+            error: JSON.stringify({
+              type: 'toolkit_missing',
+              title: 'CUDA requires NVIDIA CUDA Toolkit',
+              description: 'CUDA (NVIDIA GPU) requires NVIDIA CUDA Toolkit to be installed.',
+              downloadUrl,
+              downloadLabel: 'Download and install',
+              steps: [
+                'Restart your computer after installation',
+                'Try installing Qwen with CUDA acceleration again'
+              ],
+              fallbackToCpu: { engine: 'qwen' }
+            })
+          }
+        }
+      }
+
+      return { success: false, error: `PyTorch verification failed: ${errorMsg}` }
+    }
+
+    const { stdout } = verifyResult
+    if (!stdout.includes('OK')) {
+      return { success: false, error: 'PyTorch verification failed' }
+    }
+
+    // Pre-download Qwen3-TTS model (~1.2GB)
+    onProgress({
+      stage: 'qwen',
+      progress: scaleProgress(85),
+      details: 'Downloading Qwen3-TTS model (~1.2GB)...'
+    })
+
+    const preloadScript = `import sys
+from transformers import AutoTokenizer, AutoModel
+
+print("QWEN_DOWNLOADING", flush=True)
+model_name = "Qwen/Qwen2-Audio-7B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+print("QWEN_MODEL_OK", flush=True)
+`
+    const preloadScriptPath = path.join(qwenPath, 'preload_model.py')
+    fs.writeFileSync(preloadScriptPath, preloadScript, 'utf-8')
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn(targetPython, [preloadScriptPath], {
+          shell: process.platform === 'win32',
+          env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        })
+
+        let stderr = ''
+
+        proc.stdout?.on('data', (data: Buffer) => {
+          const str = data.toString()
+          if (str.includes('QWEN_DOWNLOADING')) {
+            onProgress({
+              stage: 'qwen',
+              progress: scaleProgress(85),
+              details: 'Downloading Qwen3-TTS model...'
+            })
+          } else if (str.includes('QWEN_MODEL_OK')) {
+            onProgress({
+              stage: 'qwen',
+              progress: scaleProgress(98),
+              details: 'Qwen3-TTS model downloaded!'
+            })
+          }
+        })
+
+        proc.stderr?.on('data', (data: Buffer) => {
+          stderr += data.toString()
+          // HuggingFace shows download progress to stderr
+          const progressMatch = data.toString().match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*(M|MB|G|GB)/i)
+          if (progressMatch) {
+            const downloaded = parseFloat(progressMatch[1])
+            const total = parseFloat(progressMatch[2])
+            const unit = progressMatch[3].toUpperCase().replace('B', '')
+            const downloadedMB = unit === 'G' ? downloaded * 1024 : downloaded
+            const totalMB = unit === 'G' ? total * 1024 : total
+            onProgress({
+              stage: 'qwen',
+              progress: scaleProgress(85 + Math.round((downloadedMB / totalMB) * 13)),
+              details: `Downloading Qwen3-TTS model: ${Math.round(downloadedMB)}/${Math.round(totalMB)} MB`
+            })
+          }
+        })
+
+        const timeout = setTimeout(() => {
+          proc.kill()
+          reject(new Error('Model download timeout'))
+        }, 1800000) // 30 min timeout
+
+        proc.on('close', (code) => {
+          clearTimeout(timeout)
+          if (code === 0) {
+            resolve()
+          } else {
+            // Model download failed, but don't fail the whole installation
+            console.warn('[installQwen] Model preload failed:', stderr.slice(-500))
+            resolve()
+          }
+        })
+
+        proc.on('error', (err) => {
+          clearTimeout(timeout)
+          console.warn('[installQwen] Model preload error:', err.message)
+          resolve()
+        })
+      })
+    } finally {
+      try { unlinkSync(preloadScriptPath) } catch {}
+    }
+
+    // Save accelerator config
+    saveAcceleratorConfig('qwen', accelerator)
+
+    onProgress({
+      stage: 'qwen',
+      progress: 100,
+      details: 'Qwen3-TTS installation complete!'
     })
 
     return { success: true }

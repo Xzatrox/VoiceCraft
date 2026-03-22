@@ -7,11 +7,13 @@ import type { GPUInfo, AvailableAccelerators, AcceleratorType, AcceleratorConfig
 import {
   getSileroPath,
   getCoquiPath,
+  getQwenPath,
   getSileroPathForAccelerator,
   getCoquiPathForAccelerator,
+  getQwenPathForAccelerator,
   setActiveAccelerator
 } from './paths'
-import { installSilero, installCoqui } from './installers'
+import { installSilero, installCoqui, installQwen } from './installers'
 
 const execAsync = promisify(exec)
 
@@ -129,8 +131,8 @@ export async function getAvailableAccelerators(): Promise<AvailableAccelerators>
 }
 
 // Read current accelerator config from specific accelerator path
-export function getCurrentAccelerator(engine: 'silero' | 'coqui'): AcceleratorConfig | null {
-  const basePath = engine === 'silero' ? getSileroPath() : getCoquiPath()
+export function getCurrentAccelerator(engine: 'silero' | 'coqui' | 'qwen'): AcceleratorConfig | null {
+  const basePath = engine === 'silero' ? getSileroPath() : engine === 'coqui' ? getCoquiPath() : getQwenPath()
   const configPath = path.join(basePath, 'accelerator.json')
   try {
     if (existsSync(configPath)) {
@@ -168,6 +170,18 @@ export async function removeCoquiInstallation(accelerator?: AcceleratorType): Pr
   if (existsSync(coquiPath)) {
     rmSync(coquiPath, { recursive: true, force: true })
     console.log(`[removeCoquiInstallation] Removed: ${coquiPath}`)
+  }
+}
+
+// Remove Qwen installation for a specific accelerator
+export async function removeQwenInstallation(accelerator?: AcceleratorType): Promise<void> {
+  const qwenPath = accelerator
+    ? getQwenPathForAccelerator(accelerator)
+    : getQwenPath()
+
+  if (existsSync(qwenPath)) {
+    rmSync(qwenPath, { recursive: true, force: true })
+    console.log(`[removeQwenInstallation] Removed: ${qwenPath}`)
   }
 }
 
@@ -266,6 +280,37 @@ export async function reinstallCoquiWithAccelerator(
     })
   } else {
     onProgress({ stage: 'error', message: result.error || 'Ошибка установки' })
+  }
+
+  return result
+}
+
+// Install or switch to Qwen with specified accelerator
+export async function reinstallQwenWithAccelerator(
+  accelerator: AcceleratorType,
+  onProgress: (progress: ReinstallProgress) => void
+): Promise<{ success: boolean; error?: string }> {
+  onProgress({ stage: 'installing', message: 'Installing Qwen3-TTS...', progress: 0 })
+
+  // Install Qwen to accelerator-specific folder (qwen-cpu, qwen-cuda, etc.)
+  const result = await installQwen((p) => {
+    onProgress({
+      stage: 'installing',
+      message: p.details || 'Installing...',
+      progress: p.progress
+    })
+  }, accelerator)
+
+  if (result.success) {
+    // Set this accelerator as active
+    setActiveAccelerator('qwen', accelerator)
+    onProgress({
+      stage: 'complete',
+      message: `Qwen3-TTS installed with ${accelerator.toUpperCase()} acceleration!`,
+      progress: 100
+    })
+  } else {
+    onProgress({ stage: 'error', message: result.error || 'Installation error' })
   }
 
   return result

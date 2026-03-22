@@ -374,6 +374,60 @@ export const COQUI_VOICES: Record<string, VoiceInfo[]> = {
   ]
 }
 
+// Qwen3-TTS voice configurations with instruction support
+// Supports Russian language with instruction-based voice control
+export const QWEN_VOICES: Record<string, VoiceInfo[]> = {
+  'ru-RU': [
+    {
+      name: 'Qwen Male',
+      shortName: 'qwen-male',
+      gender: 'Male',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'QwenLM/Qwen3-TTS'
+    },
+    {
+      name: 'Qwen Female',
+      shortName: 'qwen-female',
+      gender: 'Female',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'QwenLM/Qwen3-TTS'
+    },
+    {
+      name: 'Qwen Neutral',
+      shortName: 'qwen-neutral',
+      gender: 'Male',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'QwenLM/Qwen3-TTS'
+    }
+  ],
+  'en': [
+    {
+      name: 'Qwen Male (EN)',
+      shortName: 'qwen-male-en',
+      gender: 'Male',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'QwenLM/Qwen3-TTS'
+    },
+    {
+      name: 'Qwen Female (EN)',
+      shortName: 'qwen-female-en',
+      gender: 'Female',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'QwenLM/Qwen3-TTS'
+    }
+  ]
+}
+
 // Check if Piper voice model file exists
 export function isPiperVoiceInstalled(modelPath: string): boolean {
   const resourcesPath = getPiperResourcesPath()
@@ -418,9 +472,21 @@ export async function getVoicesForLanguage(language: string, provider?: TTSProvi
     allVoices = allVoices.concat(COQUI_VOICES[language] || [])
   }
 
+  // Qwen3-TTS requires Python environment to be set up
+  if ((!provider || provider === 'qwen') && checkQwenInstalled()) {
+    allVoices = allVoices.concat(QWEN_VOICES[language] || [])
+  }
+
   if (allVoices.length === 0) {
     throw new Error(`Language ${language} is not supported`)
   }
 
   return allVoices
+}
+
+// Check if Qwen3-TTS is installed
+function checkQwenInstalled(): boolean {
+  // Import dynamically to avoid circular dependency
+  const { checkQwenInstalled: checkInstalled } = require('../setup/dependencies')
+  return checkInstalled()
 }

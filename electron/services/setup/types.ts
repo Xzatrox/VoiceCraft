@@ -21,6 +21,8 @@ export interface DependencyStatus {
   coqui: boolean
   coquiAvailable: boolean // true if Python is available for Coqui setup
   coquiBuildToolsAvailable: boolean // true if Visual Studio Build Tools are installed
+  qwen: boolean
+  qwenAvailable: boolean // true if Python is available for Qwen setup
   rhvoiceCore: boolean // true if RHVoice SAPI engine is installed
   rhvoiceVoices: string[] // list of installed RHVoice voice names
   piperVoices: {

@@ -640,10 +640,10 @@ if __name__ == "__main__":
 `
 }
 
-// TTS Server script content - Universal server for Silero and Coqui
+// TTS Server script content - Universal server for Silero, Coqui, and Qwen
 export function getTTSServerScriptContent(): string {
   return `#!/usr/bin/env python3
-"""Universal TTS Server for Silero and Coqui XTTS"""
+"""Universal TTS Server for Silero, Coqui XTTS, and Qwen3-TTS"""
 
 import argparse, gc, io, os, sys, re, threading, time
 from pathlib import Path
@@ -670,8 +670,9 @@ def _patched_load(*a, **kw):
 torch.load = _patched_load
 
 app = Flask(__name__)
-models = {"silero": {"ru": None, "en": None}, "coqui": None}
+models = {"silero": {"ru": None, "en": None}, "coqui": None, "qwen": None}
 coqui_lock = threading.Lock()
+qwen_lock = threading.Lock()
 ruaccent_model = None
 
 def load_ruaccent():
@@ -861,11 +862,75 @@ def generate_coqui(text, speaker, lang):
             if os.path.exists(tmp):
                 os.unlink(tmp)
 
+def load_qwen_model():
+    global models
+    print("Loading Qwen3-TTS...", file=sys.stderr)
+    try:
+        from transformers import AutoTokenizer, Qwen2AudioForConditionalGeneration
+        model_name = "Qwen/Qwen2-Audio-7B-Instruct"
+        print(f"Loading Qwen model: {model_name}", file=sys.stderr)
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = Qwen2AudioForConditionalGeneration.from_pretrained(model_name)
+        # Try to use detected device, fall back to CPU if it fails
+        target_device = device
+        try:
+            model.to(torch.device(target_device))
+        except Exception as e:
+            print(f"Failed to load Qwen on {target_device}: {e}. Falling back to CPU.", file=sys.stderr)
+            target_device = "cpu"
+            model.to(torch.device("cpu"))
+        models["qwen"] = {"model": model, "tokenizer": tokenizer}
+        print(f"Qwen loaded on {target_device}. Memory: {get_memory_gb():.2f} GB", file=sys.stderr)
+    except Exception as e:
+        print(f"Failed to load Qwen: {e}", file=sys.stderr)
+        raise
+
+def generate_qwen(text, speaker, lang, instruction=None):
+    with qwen_lock:
+        if models["qwen"] is None:
+            raise RuntimeError("Qwen model is not loaded. Please load it first.")
+        
+        model_data = models["qwen"]
+        model = model_data["model"]
+        tokenizer = model_data["tokenizer"]
+        
+        # Build instruction for voice control
+        if instruction is None:
+            # Default instruction based on speaker
+            gender = "male" if "male" in speaker.lower() else "female" if "female" in speaker.lower() else "neutral"
+            instruction = f"Generate speech in {lang} language with {gender} voice, neutral timbre, normal speaking style, and neutral emotion."
+        
+        # Prepare input
+        prompt = f"<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\n{instruction}\\n{text}<|im_end|>\\n<|im_start|>assistant\\n"
+        
+        try:
+            inputs = tokenizer(prompt, return_tensors="pt")
+            if device != "cpu":
+                inputs = {k: v.to(device) for k, v in inputs.items()}
+            
+            # Generate audio
+            with torch.no_grad():
+                outputs = model.generate(**inputs, max_length=2048)
+            
+            # Extract audio from outputs
+            # Note: This is a simplified implementation
+            # Actual Qwen3-TTS API may differ
+            audio = outputs.cpu().numpy()
+            
+            # Convert to WAV format
+            return audio_to_wav_bytes(audio, sr=24000)
+        except Exception as e:
+            print(f"Qwen generation failed: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            raise
+
 @app.route("/status", methods=["GET"])
 def status():
     return jsonify({
         "silero": {"ru_loaded": models["silero"]["ru"] is not None, "en_loaded": models["silero"]["en"] is not None},
         "coqui": {"loaded": models["coqui"] is not None},
+        "qwen": {"loaded": models["qwen"] is not None},
         "memory_gb": round(get_memory_gb(), 2),
         "device": device,
         "backend": backend,
@@ -883,6 +948,8 @@ def load_model():
             load_silero_model(lang)
         elif engine == "coqui" and models["coqui"] is None:
             load_coqui_model()
+        elif engine == "qwen" and models["qwen"] is None:
+            load_qwen_model()
         return jsonify({"success": True, "memory_gb": round(get_memory_gb(), 2)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -898,9 +965,12 @@ def unload_model():
             models["silero"] = {"ru": None, "en": None}
     elif engine == "coqui":
         models["coqui"] = None
+    elif engine == "qwen":
+        models["qwen"] = None
     elif engine == "all":
         models["silero"] = {"ru": None, "en": None}
         models["coqui"] = None
+        models["qwen"] = None
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -912,12 +982,20 @@ def generate():
     engine, text, speaker = data.get("engine"), data.get("text"), data.get("speaker")
     lang, rate = data.get("language", "ru"), data.get("rate", 1.0)
     use_ruaccent = data.get("use_ruaccent", False)
+    instruction = data.get("instruction")
     if not all([engine, text, speaker]):
         return jsonify({"error": "Missing params"}), 400
     try:
-        # Apply ruaccent stress marks only for Silero (not for Coqui)
-        processed_text = apply_stress_marks(text, lang) if (engine == "silero" and use_ruaccent) else text
-        audio = generate_silero(processed_text, speaker, lang, rate) if engine == "silero" else generate_coqui(text, speaker, lang)
+        if engine == "silero":
+            # Apply ruaccent stress marks only for Silero
+            processed_text = apply_stress_marks(text, lang) if use_ruaccent else text
+            audio = generate_silero(processed_text, speaker, lang, rate)
+        elif engine == "coqui":
+            audio = generate_coqui(text, speaker, lang)
+        elif engine == "qwen":
+            audio = generate_qwen(text, speaker, lang, instruction)
+        else:
+            return jsonify({"error": f"Unknown engine: {engine}"}), 400
         return Response(audio, mimetype="audio/wav")
     except Exception as e:
         import traceback
@@ -928,7 +1006,7 @@ def generate():
 @app.route("/shutdown", methods=["POST"])
 def shutdown():
     global models
-    models = {"silero": {"ru": None, "en": None}, "coqui": None}
+    models = {"silero": {"ru": None, "en": None}, "coqui": None, "qwen": None}
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

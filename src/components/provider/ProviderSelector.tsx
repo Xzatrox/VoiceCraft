@@ -28,6 +28,8 @@ export function ProviderSelector({
         return t.providers.piper.description
       case 'rhvoice':
         return t.providers.rhvoice.description
+      case 'qwen':
+        return t.providers.qwen.description
       case 'elevenlabs':
         return t.providers.elevenlabs.description
       default:
@@ -36,7 +38,7 @@ export function ProviderSelector({
   }
 
   const getProviderAvailability = (providerId: string) => {
-    if (providerId === 'silero' || providerId === 'coqui') {
+    if (providerId === 'silero' || providerId === 'coqui' || providerId === 'qwen') {
       return true
     }
     return voices.some((v) => v.provider === providerId)

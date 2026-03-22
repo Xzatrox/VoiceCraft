@@ -134,6 +134,20 @@ export const en: Translations = {
       apiKeyPlaceholder: 'Enter your ElevenLabs API key',
       getApiKey: 'Get your API key from',
     },
+    qwen: {
+      name: 'Qwen3-TTS',
+      description: 'Advanced instruction-based TTS by Alibaba Cloud. Supports Russian and English with natural prosody and voice control through text instructions. Control timbre, gender, speaking style, and emotion. Optimized for Apple Silicon (MPS), CUDA, and DirectML. High-quality audiobook generation with customizable voice characteristics.',
+      setupRequired: 'Qwen3-TTS Setup Required',
+      waitMinutes: 'Please wait, this may take several minutes...',
+      forQwenWork: 'For Qwen3-TTS to work, the following will be installed:',
+      pythonEmbedded: 'Python 3.11 (embedded) — ~25 MB',
+      dependencies: 'Dependencies (transformers, accelerate) — ~50 MB',
+      qwenModel: 'Qwen3-TTS model — ~1.2 GB (downloaded on first use)',
+      initialDownload: 'Initial download',
+      fasterOnGpu: '5-10x faster',
+      instructionSupport: 'Instruction-based voice control',
+      instructionDescription: 'Control voice timbre, gender (male/female), speaking style, and emotion through text instructions',
+    },
   },
 
   // GPU & Acceleration

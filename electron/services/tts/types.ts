@@ -1,4 +1,4 @@
-export type TTSProvider = 'rhvoice' | 'piper' | 'silero' | 'elevenlabs' | 'coqui'
+export type TTSProvider = 'rhvoice' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'qwen'
 
 export interface VoiceInfo {
   name: string
@@ -6,9 +6,10 @@ export interface VoiceInfo {
   gender: 'Male' | 'Female'
   locale: string
   provider: TTSProvider
-  modelPath?: string // For Piper and Silero
+  modelPath?: string // For Piper, Silero, and Qwen
   voiceId?: string // For ElevenLabs
   isInstalled?: boolean // For RHVoice and Piper
+  instructable?: boolean // For Qwen (supports instruction-based voice control)
 }
 
 export interface AvailableDevice {
@@ -25,6 +26,9 @@ export interface TTSServerStatus {
     en_loaded: boolean
   }
   coqui: {
+    loaded: boolean
+  }
+  qwen: {
     loaded: boolean
   }
   memory_gb: number

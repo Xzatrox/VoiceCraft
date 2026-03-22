@@ -26,7 +26,7 @@ function getAcceleratorSettingsPath(): string {
 }
 
 // Get/set active accelerator for an engine
-export function getActiveAccelerator(engine: 'silero' | 'coqui'): AcceleratorType {
+export function getActiveAccelerator(engine: 'silero' | 'coqui' | 'qwen'): AcceleratorType {
   try {
     const settingsPath = getAcceleratorSettingsPath()
     if (fs.existsSync(settingsPath)) {
@@ -39,7 +39,7 @@ export function getActiveAccelerator(engine: 'silero' | 'coqui'): AcceleratorTyp
   return 'cpu'
 }
 
-export function setActiveAccelerator(engine: 'silero' | 'coqui', accelerator: AcceleratorType): void {
+export function setActiveAccelerator(engine: 'silero' | 'coqui' | 'qwen', accelerator: AcceleratorType): void {
   const settingsPath = getAcceleratorSettingsPath()
   let settings: Record<string, AcceleratorType> = {}
 
@@ -61,7 +61,7 @@ export function setActiveAccelerator(engine: 'silero' | 'coqui', accelerator: Ac
 }
 
 // Get all installed accelerators for an engine
-export function getInstalledAccelerators(engine: 'silero' | 'coqui'): AcceleratorType[] {
+export function getInstalledAccelerators(engine: 'silero' | 'coqui' | 'qwen'): AcceleratorType[] {
   const resourcesPath = getResourcesPath()
   const installed: AcceleratorType[] = []
 
@@ -87,6 +87,11 @@ export function getCoquiPathForAccelerator(accelerator: AcceleratorType): string
   return path.join(getResourcesPath(), `coqui-${accelerator}`)
 }
 
+// Get path to Qwen for specific accelerator
+export function getQwenPathForAccelerator(accelerator: AcceleratorType): string {
+  return path.join(getResourcesPath(), `qwen-${accelerator}`)
+}
+
 // Get path to active Silero installation (based on settings)
 export function getSileroPath(): string {
   const activeAccelerator = getActiveAccelerator('silero')
@@ -97,6 +102,12 @@ export function getSileroPath(): string {
 export function getCoquiPath(): string {
   const activeAccelerator = getActiveAccelerator('coqui')
   return getCoquiPathForAccelerator(activeAccelerator)
+}
+
+// Get path to active Qwen installation (based on settings)
+export function getQwenPath(): string {
+  const activeAccelerator = getActiveAccelerator('qwen')
+  return getQwenPathForAccelerator(activeAccelerator)
 }
 
 export function getRHVoicePath(): string {
@@ -120,15 +131,20 @@ export function getEmbeddedPythonExe(): string {
 }
 
 // Get path to Python for specific engine+accelerator (silero-cpu/python, silero-cuda/python, etc.)
-export function getEnginePythonPath(engine: 'silero' | 'coqui', accelerator: AcceleratorType): string {
-  const enginePath = engine === 'silero'
-    ? getSileroPathForAccelerator(accelerator)
-    : getCoquiPathForAccelerator(accelerator)
+export function getEnginePythonPath(engine: 'silero' | 'coqui' | 'qwen', accelerator: AcceleratorType): string {
+  let enginePath: string
+  if (engine === 'silero') {
+    enginePath = getSileroPathForAccelerator(accelerator)
+  } else if (engine === 'coqui') {
+    enginePath = getCoquiPathForAccelerator(accelerator)
+  } else {
+    enginePath = getQwenPathForAccelerator(accelerator)
+  }
   return path.join(enginePath, 'python')
 }
 
 // Get path to Python executable for specific engine+accelerator
-export function getEnginePythonExe(engine: 'silero' | 'coqui', accelerator: AcceleratorType): string {
+export function getEnginePythonExe(engine: 'silero' | 'coqui' | 'qwen', accelerator: AcceleratorType): string {
   if (process.platform === 'darwin') {
     // macOS venv structure: python/bin/python3
     return path.join(getEnginePythonPath(engine, accelerator), 'bin', 'python3')

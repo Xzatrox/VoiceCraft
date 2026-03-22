@@ -134,6 +134,20 @@ export interface Translations {
       apiKeyPlaceholder: string;
       getApiKey: string;
     };
+    qwen: {
+      name: string;
+      description: string;
+      setupRequired: string;
+      waitMinutes: string;
+      forQwenWork: string;
+      pythonEmbedded: string;
+      dependencies: string;
+      qwenModel: string;
+      initialDownload: string;
+      fasterOnGpu: string;
+      instructionSupport: string;
+      instructionDescription: string;
+    };
   };
 
   // GPU & Acceleration

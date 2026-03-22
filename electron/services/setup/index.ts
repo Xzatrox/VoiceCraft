@@ -20,8 +20,10 @@ export {
   getFfmpegPath,
   getSileroPath,
   getCoquiPath,
+  getQwenPath,
   getSileroPathForAccelerator,
   getCoquiPathForAccelerator,
+  getQwenPathForAccelerator,
   getActiveAccelerator,
   setActiveAccelerator,
   getInstalledAccelerators,
@@ -46,8 +48,10 @@ export {
 export {
   checkSileroInstalled,
   checkCoquiInstalled,
+  checkQwenInstalled,
   checkSileroInstalledForAccelerator,
   checkCoquiInstalledForAccelerator,
+  checkQwenInstalledForAccelerator,
   checkDependencies,
   needsSetup,
   checkDependenciesAsync
@@ -72,6 +76,7 @@ export {
   installFfmpeg,
   installSilero,
   installCoqui,
+  installQwen,
   runSetup,
   getEstimatedDownloadSize
 } from './installers'
@@ -97,7 +102,9 @@ export {
   getCurrentAccelerator,
   removeSileroInstallation,
   removeCoquiInstallation,
+  removeQwenInstallation,
   checkGPUToolkit,
   reinstallSileroWithAccelerator,
-  reinstallCoquiWithAccelerator
+  reinstallCoquiWithAccelerator,
+  reinstallQwenWithAccelerator
 } from './gpu'

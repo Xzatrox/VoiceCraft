@@ -19,8 +19,9 @@ export interface VoiceInfo {
   shortName: string
   gender: 'Male' | 'Female'
   locale: string
-  provider: 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice'
+  provider: 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice' | 'qwen'
   isInstalled?: boolean
+  instructable?: boolean
 }
 
 export interface ProviderInfo {
@@ -63,6 +64,7 @@ export interface TTSServerStatus {
   running: boolean
   silero: { ru_loaded: boolean; en_loaded: boolean }
   coqui: { loaded: boolean }
+  qwen: { loaded: boolean }
   memory_gb: number
   cpu_percent: number
   device: string
@@ -104,4 +106,4 @@ export interface InstallProgress {
   details: string
 }
 
-export type TTSProvider = 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice'
+export type TTSProvider = 'system' | 'piper' | 'silero' | 'elevenlabs' | 'coqui' | 'rhvoice' | 'qwen'
