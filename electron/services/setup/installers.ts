@@ -1782,25 +1782,27 @@ export async function installQwen(
       }
     }
 
-    // Install Qwen3-TTS dependencies
+    // Install qwen-tts package and server dependencies
     onProgress({
       stage: 'qwen',
       progress: scaleProgress(55),
-      details: 'Installing Qwen3-TTS dependencies...'
+      details: 'Installing qwen-tts package...'
     })
 
     const depsResult = await runPipWithProgress(
       targetPython,
-      'transformers>=4.37.0 accelerate>=0.26.0 soundfile>=0.12.1 flask==3.0.3 psutil==6.1.0',
+      'qwen-tts flask==3.0.3 psutil==6.1.0',
       {
-        timeout: 300000,
+        timeout: 600000,
         onProgress: (info) => {
           const progress = scaleProgress(55 + Math.round((info.percentage || 0) * 0.25))
-          let details = 'Installing dependencies...'
+          let details = 'Installing qwen-tts...'
           if (info.phase === 'downloading' && info.downloaded !== undefined && info.total !== undefined) {
             details = `Downloading ${info.package}: ${info.downloaded.toFixed(0)}/${info.total.toFixed(0)} MB`
           } else if (info.phase === 'downloading' && info.percentage !== undefined) {
             details = `Downloading ${info.package}: ${info.percentage}%`
+          } else if (info.phase === 'installing') {
+            details = 'Installing packages...'
           }
           onProgress({ stage: 'qwen', progress, details })
         }
@@ -1808,7 +1810,7 @@ export async function installQwen(
     )
 
     if (!depsResult.success) {
-      return { success: false, error: depsResult.error || 'Failed to install dependencies' }
+      return { success: false, error: depsResult.error || 'Failed to install qwen-tts' }
     }
 
     // Verify installation
@@ -1820,7 +1822,7 @@ export async function installQwen(
 
     let verifyResult
     try {
-      verifyResult = await execAsync(`"${targetPython}" -c "import torch; import transformers; print('OK')"`, { timeout: 30000 })
+      verifyResult = await execAsync(`"${targetPython}" -c "import torch; from qwen_tts import Qwen3TTSModel; print('OK')"`, { timeout: 30000 })
     } catch (error: any) {
       const errorMsg = error.message || error.toString()
 
@@ -1879,12 +1881,12 @@ export async function installQwen(
     })
 
     const preloadScript = `import sys
-from transformers import AutoTokenizer, AutoModel
+import torch
+from qwen_tts import Qwen3TTSModel
 
 print("QWEN_DOWNLOADING", flush=True)
-model_name = "Qwen/Qwen2-Audio-7B-Instruct"
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+model_name = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+model = Qwen3TTSModel.from_pretrained(model_name, device_map="cpu")
 print("QWEN_MODEL_OK", flush=True)
 `
     const preloadScriptPath = path.join(qwenPath, 'preload_model.py')

@@ -374,56 +374,174 @@ export const COQUI_VOICES: Record<string, VoiceInfo[]> = {
   ]
 }
 
-// Qwen3-TTS voice configurations with instruction support
-// Supports Russian language with instruction-based voice control
+// Qwen3-TTS voice configurations using CustomVoice model
+// 9 built-in speakers from Qwen3-TTS-12Hz-1.7B-CustomVoice
+// Each speaker has a native language but can speak all supported languages
 export const QWEN_VOICES: Record<string, VoiceInfo[]> = {
   'ru-RU': [
     {
-      name: 'Qwen Male',
-      shortName: 'qwen-male',
-      gender: 'Male',
-      locale: 'ru-RU',
-      provider: 'qwen',
-      instructable: true,
-      modelPath: 'QwenLM/Qwen3-TTS'
-    },
-    {
-      name: 'Qwen Female',
-      shortName: 'qwen-female',
+      name: 'Vivian',
+      shortName: 'qwen-vivian',
       gender: 'Female',
       locale: 'ru-RU',
       provider: 'qwen',
       instructable: true,
-      modelPath: 'QwenLM/Qwen3-TTS'
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
     },
     {
-      name: 'Qwen Neutral',
-      shortName: 'qwen-neutral',
+      name: 'Serena',
+      shortName: 'qwen-serena',
+      gender: 'Female',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Sohee',
+      shortName: 'qwen-sohee',
+      gender: 'Female',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Ono_Anna',
+      shortName: 'qwen-ono-anna',
+      gender: 'Female',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Uncle_Fu',
+      shortName: 'qwen-uncle-fu',
       gender: 'Male',
       locale: 'ru-RU',
       provider: 'qwen',
       instructable: true,
-      modelPath: 'QwenLM/Qwen3-TTS'
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Dylan',
+      shortName: 'qwen-dylan',
+      gender: 'Male',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Eric',
+      shortName: 'qwen-eric',
+      gender: 'Male',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Ryan',
+      shortName: 'qwen-ryan',
+      gender: 'Male',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Aiden',
+      shortName: 'qwen-aiden',
+      gender: 'Male',
+      locale: 'ru-RU',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
     }
   ],
   'en': [
     {
-      name: 'Qwen Male (EN)',
-      shortName: 'qwen-male-en',
+      name: 'Ryan (EN)',
+      shortName: 'qwen-ryan-en',
       gender: 'Male',
       locale: 'en',
       provider: 'qwen',
       instructable: true,
-      modelPath: 'QwenLM/Qwen3-TTS'
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
     },
     {
-      name: 'Qwen Female (EN)',
-      shortName: 'qwen-female-en',
+      name: 'Aiden (EN)',
+      shortName: 'qwen-aiden-en',
+      gender: 'Male',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Vivian (EN)',
+      shortName: 'qwen-vivian-en',
       gender: 'Female',
       locale: 'en',
       provider: 'qwen',
       instructable: true,
-      modelPath: 'QwenLM/Qwen3-TTS'
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Serena (EN)',
+      shortName: 'qwen-serena-en',
+      gender: 'Female',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Uncle_Fu (EN)',
+      shortName: 'qwen-uncle-fu-en',
+      gender: 'Male',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Dylan (EN)',
+      shortName: 'qwen-dylan-en',
+      gender: 'Male',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Eric (EN)',
+      shortName: 'qwen-eric-en',
+      gender: 'Male',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Sohee (EN)',
+      shortName: 'qwen-sohee-en',
+      gender: 'Female',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+    },
+    {
+      name: 'Ono_Anna (EN)',
+      shortName: 'qwen-ono-anna-en',
+      gender: 'Female',
+      locale: 'en',
+      provider: 'qwen',
+      instructable: true,
+      modelPath: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
     }
   ]
 }

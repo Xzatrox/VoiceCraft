@@ -1143,7 +1143,8 @@ async function generateChunkAudio(
         throw new Error('Qwen model is not loaded. Please load it first.')
       }
       const qwenLang = voiceInfo.locale?.startsWith('ru') ? 'ru' : 'en'
-      await generateViaServer('qwen', chunk, voiceInfo.shortName, qwenLang, outputFile)
+      const qwenSpeaker = voiceInfo.name.replace(/\s*\(EN\)$/, '')
+      await generateViaServer('qwen', chunk, qwenSpeaker, qwenLang, outputFile)
       break
     }
 
@@ -1789,7 +1790,8 @@ export async function previewVoice(
 
       case 'qwen': {
         const qwenLang = voiceInfo.locale?.startsWith('ru') ? 'ru' : 'en'
-        await generateViaServerForPreview('qwen', processedText, voiceInfo.shortName, qwenLang, tempWavFile)
+        const qwenSpeaker = voiceInfo.name.replace(/\s*\(EN\)$/, '')
+        await generateViaServerForPreview('qwen', processedText, qwenSpeaker, qwenLang, tempWavFile)
         break
       }
 

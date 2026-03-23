@@ -660,12 +660,21 @@ try:
     from flask import Flask, request, jsonify, Response
     import torch
     import psutil
-    import scipy.io.wavfile as wavfile
     import numpy as np
-    from scipy import signal
 except ImportError as e:
     print(f"Missing dependency: {e}", file=sys.stderr)
     sys.exit(1)
+
+# scipy is optional - only needed for Silero (WAV writing + speed change)
+_scipy_wavfile = None
+_scipy_signal = None
+def _ensure_scipy():
+    global _scipy_wavfile, _scipy_signal
+    if _scipy_wavfile is None:
+        import scipy.io.wavfile as wavfile
+        from scipy import signal
+        _scipy_wavfile = wavfile
+        _scipy_signal = signal
 
 _orig_load = torch.load
 def _patched_load(*a, **kw):
@@ -781,15 +790,19 @@ def parse_rate(rate_str):
         return 1.0
 
 def change_speed(audio, factor):
-    return audio if factor == 1.0 else signal.resample(audio, int(len(audio) / factor))
+    if factor == 1.0:
+        return audio
+    _ensure_scipy()
+    return _scipy_signal.resample(audio, int(len(audio) / factor))
 
 def audio_to_wav_bytes(audio, sr=48000):
     if isinstance(audio, torch.Tensor):
         audio = audio.numpy()
     if audio.ndim > 1:
         audio = audio.squeeze()
+    _ensure_scipy()
     buf = io.BytesIO()
-    wavfile.write(buf, sr, (audio * 32767).astype(np.int16))
+    _scipy_wavfile.write(buf, sr, (audio * 32767).astype(np.int16))
     buf.seek(0)
     return buf.read()
 
@@ -830,11 +843,30 @@ def generate_silero(text, speaker, lang, rate=1.0, sr=48000):
     return audio_to_wav_bytes(audio, sr)
 
 def patch_gpt2_for_directml():
-    """Patch torch.inference_mode to no-op for DirectML compatibility.
-    DirectML cannot handle inference-mode tensors (version_counter errors)."""
+    """Patch torch for DirectML compatibility.
+    1) inference_mode -> no_grad (version_counter errors)
+    2) gather: cast int64 indices to int32 (DirectML gather bug)"""
     try:
         torch.inference_mode = lambda mode=True: torch.no_grad()
-        print("Patched torch.inference_mode for DirectML compatibility", file=sys.stderr)
+        _orig_gather = torch.gather
+        def _dml_gather(input, dim, index, **kw):
+            if index.dtype == torch.int64:
+                index = index.to(torch.int32)
+            return _orig_gather(input, dim, index, **kw)
+        torch.gather = _dml_gather
+        _orig_scatter = torch.Tensor.scatter
+        def _dml_scatter(self, dim, index, *a, **kw):
+            if index.dtype == torch.int64:
+                index = index.to(torch.int32)
+            return _orig_scatter(self, dim, index, *a, **kw)
+        torch.Tensor.scatter = _dml_scatter
+        _orig_scatter_ = torch.Tensor.scatter_
+        def _dml_scatter_(self, dim, index, *a, **kw):
+            if index.dtype == torch.int64:
+                index = index.to(torch.int32)
+            return _orig_scatter_(self, dim, index, *a, **kw)
+        torch.Tensor.scatter_ = _dml_scatter_
+        print("Patched torch.inference_mode, gather, scatter for DirectML compatibility", file=sys.stderr)
     except Exception as e:
         print(f"Failed to patch for DirectML: {e}", file=sys.stderr)
 
@@ -871,21 +903,52 @@ def load_qwen_model():
     global models
     print("Loading Qwen3-TTS...", file=sys.stderr)
     try:
-        from transformers import AutoTokenizer, Qwen2AudioForConditionalGeneration
-        model_name = "Qwen/Qwen2-Audio-7B-Instruct"
+        from qwen_tts import Qwen3TTSModel
+        model_name = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
         print(f"Loading Qwen model: {model_name}", file=sys.stderr)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = Qwen2AudioForConditionalGeneration.from_pretrained(model_name)
-        # Try to use detected device, fall back to CPU if it fails
         target_device = device
+        load_kwargs = {}
+        # DirectML: device_map is not supported by HuggingFace accelerate (requires CUDA).
+        # Load on CPU first, then move to DirectML device manually.
+        if backend == "directml":
+            patch_gpt2_for_directml()
+            load_kwargs["device_map"] = "cpu"
+        elif target_device != "cpu":
+            load_kwargs["device_map"] = target_device
+            load_kwargs["dtype"] = torch.bfloat16
+        else:
+            load_kwargs["device_map"] = "cpu"
         try:
-            model.to(torch.device(target_device))
+            model = Qwen3TTSModel.from_pretrained(model_name, **load_kwargs)
+            # DirectML: move model to GPU after loading on CPU
+            if backend == "directml" and target_device != "cpu":
+                try:
+                    dml_dev = torch.device(target_device)
+                    # Convert to float16 first to halve VRAM usage (DirectML does not support bfloat16)
+                    model.model.to(dtype=torch.float16)
+                    model.model.to(dml_dev)
+                    model.device = dml_dev
+                    print(f"Qwen model moved to {target_device} (float16)", file=sys.stderr)
+                except Exception as move_err:
+                    print(f"Failed to move Qwen to {target_device}: {move_err}. Recovering to CPU.", file=sys.stderr)
+                    target_device = "cpu"
+                    # Recover from partial .to() — move everything back to CPU
+                    model.model.to(dtype=torch.float32, device=torch.device("cpu"))
+                    model.device = torch.device("cpu")
         except Exception as e:
-            print(f"Failed to load Qwen on {target_device}: {e}. Falling back to CPU.", file=sys.stderr)
-            target_device = "cpu"
-            model.to(torch.device("cpu"))
-        models["qwen"] = {"model": model, "tokenizer": tokenizer}
+            if target_device != "cpu":
+                print(f"Failed to load Qwen on {target_device}: {e}. Falling back to CPU.", file=sys.stderr)
+                target_device = "cpu"
+                model = Qwen3TTSModel.from_pretrained(model_name, device_map="cpu")
+            else:
+                raise
+        models["qwen"] = {"model": model, "device": target_device}
         print(f"Qwen loaded on {target_device}. Memory: {get_memory_gb():.2f} GB", file=sys.stderr)
+        try:
+            speakers = model.get_supported_speakers()
+            print(f"Qwen speakers: {speakers}", file=sys.stderr)
+        except Exception:
+            pass
     except Exception as e:
         print(f"Failed to load Qwen: {e}", file=sys.stderr)
         raise
@@ -897,33 +960,29 @@ def generate_qwen(text, speaker, lang, instruction=None):
         
         model_data = models["qwen"]
         model = model_data["model"]
-        tokenizer = model_data["tokenizer"]
         
-        # Build instruction for voice control
-        if instruction is None:
-            # Default instruction based on speaker
-            gender = "male" if "male" in speaker.lower() else "female" if "female" in speaker.lower() else "neutral"
-            instruction = f"Generate speech in {lang} language with {gender} voice, neutral timbre, normal speaking style, and neutral emotion."
-        
-        # Prepare input
-        prompt = f"<|im_start|>system\\nYou are a helpful assistant.<|im_end|>\\n<|im_start|>user\\n{instruction}\\n{text}<|im_end|>\\n<|im_start|>assistant\\n"
+        # Map language codes to Qwen language names
+        lang_map = {
+            "ru": "Russian", "ru-ru": "Russian", "ru_ru": "Russian",
+            "en": "English", "en-us": "English", "en-gb": "English", "en_us": "English", "en_gb": "English",
+            "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+            "de": "German", "fr": "French", "es": "Spanish", "it": "Italian", "pt": "Portuguese"
+        }
+        language = lang_map.get(lang.lower(), "Auto")
         
         try:
-            inputs = tokenizer(prompt, return_tensors="pt")
-            if device != "cpu":
-                inputs = {k: v.to(device) for k, v in inputs.items()}
-            
-            # Generate audio
-            with torch.no_grad():
-                outputs = model.generate(**inputs, max_length=2048)
-            
-            # Extract audio from outputs
-            # Note: This is a simplified implementation
-            # Actual Qwen3-TTS API may differ
-            audio = outputs.cpu().numpy()
-            
-            # Convert to WAV format
-            return audio_to_wav_bytes(audio, sr=24000)
+            import soundfile as sf
+            wavs, sr = model.generate_custom_voice(
+                text=text,
+                language=language,
+                speaker=speaker,
+                instruct=instruction or "",
+            )
+            # Convert to WAV bytes
+            buf = io.BytesIO()
+            sf.write(buf, wavs[0], sr, format='WAV')
+            buf.seek(0)
+            return buf.read()
         except Exception as e:
             print(f"Qwen generation failed: {e}", file=sys.stderr)
             import traceback
