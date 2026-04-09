@@ -776,7 +776,30 @@ gpu_name = _device_info["gpu_name"]
 print(f"Using device: {device}, backend: {backend}, GPU: {gpu_name}", file=sys.stderr)
 
 def get_memory_gb():
-    return psutil.Process().memory_info().rss / (1024**3)
+    """Get total memory used: process RSS + GPU memory (CUDA) or model params (MPS)."""
+    rss = psutil.Process().memory_info().rss / (1024**3)
+    try:
+        if torch.cuda.is_available() and device != "cpu":
+            return torch.cuda.memory_allocated() / (1024**3)
+        # MPS/DirectML: estimate from model parameters (weights live in unified/GPU memory, not in RSS)
+        if device != "cpu":
+            total_params_bytes = 0
+            for m in models.values():
+                if m is None:
+                    continue
+                obj = m.get("model") if isinstance(m, dict) else m
+                if obj is None:
+                    continue
+                # Walk all submodules looking for parameters
+                mod = getattr(obj, "model", obj)
+                if hasattr(mod, "parameters"):
+                    for p in mod.parameters():
+                        total_params_bytes += p.nelement() * p.element_size()
+            if total_params_bytes > 0:
+                return total_params_bytes / (1024**3)
+    except Exception:
+        pass
+    return rss
 
 def parse_rate(rate_str):
     if not rate_str:
@@ -902,6 +925,16 @@ def generate_coqui(text, speaker, lang):
 def load_qwen_model():
     global models
     print("Loading Qwen3-TTS...", file=sys.stderr)
+    # Enable MPS Flash Attention for faster inference on Apple Silicon
+    if backend == "mps":
+        try:
+            from mps_flash_attn import replace_sdpa
+            replace_sdpa()
+            print("MPS Flash Attention enabled", file=sys.stderr)
+        except ImportError:
+            print("mps-flash-attn not installed, using default SDPA", file=sys.stderr)
+        except Exception as e:
+            print(f"Failed to enable MPS Flash Attention: {e}", file=sys.stderr)
     try:
         from qwen_tts import Qwen3TTSModel
         model_name = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
@@ -942,6 +975,16 @@ def load_qwen_model():
                 model = Qwen3TTSModel.from_pretrained(model_name, device_map="cpu")
             else:
                 raise
+        # torch.compile with aot_eager was tested but gives no measurable benefit
+        # for autoregressive token-by-token decoding on MPS (Qwen3-TTS 1.7B).
+        # The overhead of compilation + warmup outweighs any per-token speedup.
+        # if backend == "mps":
+        #     try:
+        #         model.model.talker = torch.compile(model.model.talker, backend="aot_eager")
+        #         model.generate_custom_voice(text="Test.", language="English", speaker=list(model.get_supported_speakers())[0])
+        #         print("torch.compile applied to Qwen talker (aot_eager)", file=sys.stderr)
+        #     except Exception as ce:
+        #         print(f"torch.compile failed, using eager mode: {ce}", file=sys.stderr)
         models["qwen"] = {"model": model, "device": target_device}
         print(f"Qwen loaded on {target_device}. Memory: {get_memory_gb():.2f} GB", file=sys.stderr)
         try:
@@ -1066,6 +1109,54 @@ def generate():
         traceback.print_exc(file=sys.stderr)
         error_msg = str(e) or repr(e) or "Unknown error occurred"
         return jsonify({"error": error_msg}), 500
+
+@app.route("/generate-batch", methods=["POST"])
+def generate_batch():
+    """Batch generation for Qwen — generates multiple texts in one model call."""
+    data = request.json or {}
+    items = data.get("items", [])
+    if not items:
+        return jsonify({"error": "Missing items"}), 400
+    engine = items[0].get("engine", "qwen")
+    if engine != "qwen":
+        return jsonify({"error": "Batch generation only supported for qwen"}), 400
+    try:
+        with qwen_lock:
+            if models["qwen"] is None:
+                raise RuntimeError("Qwen model is not loaded.")
+            model_data = models["qwen"]
+            model = model_data["model"]
+            lang_map = {
+                "ru": "Russian", "ru-ru": "Russian", "ru_ru": "Russian",
+                "en": "English", "en-us": "English", "en-gb": "English",
+                "en_us": "English", "en_gb": "English",
+                "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+                "de": "German", "fr": "French", "es": "Spanish",
+                "it": "Italian", "pt": "Portuguese"
+            }
+            texts = [it["text"] for it in items]
+            speakers = [it["speaker"] for it in items]
+            languages = [lang_map.get(it.get("language", "en").lower(), "Auto") for it in items]
+            instructs = [it.get("instruction") or "" for it in items]
+            wavs_list, sr = model.generate_custom_voice(
+                text=texts,
+                language=languages,
+                speaker=speakers,
+                instruct=instructs,
+            )
+            import base64 as b64mod
+            import soundfile as sf
+            results = []
+            for i, wav_data in enumerate(wavs_list):
+                wav_buf = io.BytesIO()
+                sf.write(wav_buf, wav_data, sr, format="WAV")
+                wav_buf.seek(0)
+                results.append(b64mod.b64encode(wav_buf.read()).decode("ascii"))
+            return jsonify({"wavs": results, "sr": sr})
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"error": str(e) or repr(e)}), 500
 
 @app.route("/shutdown", methods=["POST"])
 def shutdown():

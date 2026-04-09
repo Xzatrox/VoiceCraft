@@ -23,18 +23,13 @@ function readFileWithEncoding(filePath: string): string {
     return raw.toString('utf-8')
   }
 
-  // Try UTF-8 first — check if the first 4KB decodes cleanly
-  const sample = raw.subarray(0, Math.min(4096, raw.length)).toString('utf-8')
-  if (!sample.includes('\uFFFD')) {
-    return raw.toString('utf-8')
-  }
-
-  // Check XML declaration for encoding attribute
+  // Check XML declaration for encoding attribute FIRST — it is the most reliable signal.
+  // Must be checked before UTF-8 heuristic because windows-1251 bytes can form
+  // valid (but incorrect) UTF-8 sequences, causing Cyrillic text to be mangled.
   const header = raw.subarray(0, Math.min(512, raw.length)).toString('ascii')
   const encodingMatch = header.match(/encoding=["']([^"']+)["']/i)
   if (encodingMatch) {
     const declared = encodingMatch[1].toLowerCase()
-    // Map common FB2 encodings to Node.js buffer encoding names
     const encodingMap: Record<string, string> = {
       'windows-1251': 'windows-1251',
       'cp1251': 'windows-1251',
@@ -46,7 +41,6 @@ function readFileWithEncoding(filePath: string): string {
     }
     const nodeEncoding = encodingMap[declared]
     if (nodeEncoding && nodeEncoding !== 'utf-8') {
-      const { TextDecoder } = require('util')
       try {
         const decoder = new TextDecoder(nodeEncoding)
         return decoder.decode(raw)
@@ -54,11 +48,20 @@ function readFileWithEncoding(filePath: string): string {
         // Fallback below
       }
     }
+    // Declared as utf-8 — trust it
+    if (declared === 'utf-8') {
+      return raw.toString('utf-8')
+    }
+  }
+
+  // No encoding declaration — try UTF-8 heuristic (check if the entire file decodes cleanly)
+  const full = raw.toString('utf-8')
+  if (!full.includes('\uFFFD')) {
+    return full
   }
 
   // Last resort: try windows-1251 (most common non-UTF-8 FB2 encoding)
   try {
-    const { TextDecoder } = require('util')
     const decoder = new TextDecoder('windows-1251')
     return decoder.decode(raw)
   } catch {

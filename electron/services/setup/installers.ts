@@ -1782,6 +1782,33 @@ export async function installQwen(
       }
     }
 
+    // Install mps-flash-attn for MPS acceleration (Apple Silicon)
+    if (accelerator === 'mps') {
+      onProgress({
+        stage: 'qwen',
+        progress: scaleProgress(52),
+        details: 'Installing MPS Flash Attention...'
+      })
+
+      const mfaResult = await runPipWithProgress(
+        targetPython,
+        'mps-flash-attn',
+        {
+          extraArgs: ['--no-build-isolation'],
+          timeout: 300000,
+          onProgress: (info) => {
+            const progress = scaleProgress(52 + Math.round((info.percentage || 0) * 0.03))
+            onProgress({ stage: 'qwen', progress, details: 'Installing MPS Flash Attention...' })
+          }
+        }
+      )
+
+      if (!mfaResult.success) {
+        // Non-fatal: flash attention is optional optimization
+        console.warn('[installQwen] mps-flash-attn installation failed:', mfaResult.error)
+      }
+    }
+
     // Install qwen-tts package and server dependencies
     onProgress({
       stage: 'qwen',
@@ -1791,7 +1818,7 @@ export async function installQwen(
 
     const depsResult = await runPipWithProgress(
       targetPython,
-      'qwen-tts flask==3.0.3 psutil==6.1.0',
+      'git+https://github.com/QwenLM/Qwen3-TTS.git flask==3.0.3 psutil==6.1.0',
       {
         timeout: 600000,
         onProgress: (info) => {
@@ -1820,57 +1847,72 @@ export async function installQwen(
       details: 'Verifying installation...'
     })
 
-    let verifyResult
-    try {
-      verifyResult = await execAsync(`"${targetPython}" -c "import torch; from qwen_tts import Qwen3TTSModel; print('OK')"`, { timeout: 30000 })
-    } catch (error: any) {
-      const errorMsg = error.message || error.toString()
+    // Small delay to let filesystem sync after pip install
+    await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // Check if error is due to missing CUDA runtime
-      if (accelerator === 'cuda' && (errorMsg.includes('cudart') || errorMsg.includes('cublas') || errorMsg.includes('cusparse'))) {
-        const downloadUrl = 'https://developer.nvidia.com/cuda-downloads'
-        const cudaPath = process.env.CUDA_PATH
-        const isToolkitInstalled = cudaPath && existsSync(cudaPath)
+    // Retry verification a few times in case of timing issues
+    // (qwen_tts import loads heavy deps: transformers, torch, sox)
+    let verifySuccess = false
+    let lastError = ''
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const { stdout } = await execAsync(`"${targetPython}" -c "import torch; from qwen_tts import Qwen3TTSModel; print('OK')"`, { timeout: 60000 })
+        if (stdout.includes('OK')) {
+          verifySuccess = true
+          break
+        }
+        lastError = 'qwen_tts import did not return OK'
+      } catch (error: any) {
+        lastError = error.message || error.toString()
+        console.log(`[installQwen] Verification attempt ${attempt} failed: ${lastError}`)
 
-        if (isToolkitInstalled) {
-          return {
-            success: false,
-            error: JSON.stringify({
-              type: 'toolkit_restart_required',
-              title: 'Computer restart required',
-              description: 'NVIDIA CUDA Toolkit is installed, but a restart is needed to activate it.',
-              steps: [
-                'Restart your computer',
-                'Try installing Qwen with CUDA acceleration again'
-              ],
-              fallbackToCpu: { engine: 'qwen' }
-            })
-          }
-        } else {
-          return {
-            success: false,
-            error: JSON.stringify({
-              type: 'toolkit_missing',
-              title: 'CUDA requires NVIDIA CUDA Toolkit',
-              description: 'CUDA (NVIDIA GPU) requires NVIDIA CUDA Toolkit to be installed.',
-              downloadUrl,
-              downloadLabel: 'Download and install',
-              steps: [
-                'Restart your computer after installation',
-                'Try installing Qwen with CUDA acceleration again'
-              ],
-              fallbackToCpu: { engine: 'qwen' }
-            })
+        // Check if error is due to missing CUDA runtime
+        if (accelerator === 'cuda' && (lastError.includes('cudart') || lastError.includes('cublas') || lastError.includes('cusparse'))) {
+          const downloadUrl = 'https://developer.nvidia.com/cuda-downloads'
+          const cudaPath = process.env.CUDA_PATH
+          const isToolkitInstalled = cudaPath && existsSync(cudaPath)
+
+          if (isToolkitInstalled) {
+            return {
+              success: false,
+              error: JSON.stringify({
+                type: 'toolkit_restart_required',
+                title: 'Computer restart required',
+                description: 'NVIDIA CUDA Toolkit is installed, but a restart is needed to activate it.',
+                steps: [
+                  'Restart your computer',
+                  'Try installing Qwen with CUDA acceleration again'
+                ],
+                fallbackToCpu: { engine: 'qwen' }
+              })
+            }
+          } else {
+            return {
+              success: false,
+              error: JSON.stringify({
+                type: 'toolkit_missing',
+                title: 'CUDA requires NVIDIA CUDA Toolkit',
+                description: 'CUDA (NVIDIA GPU) requires NVIDIA CUDA Toolkit to be installed.',
+                downloadUrl,
+                downloadLabel: 'Download and install',
+                steps: [
+                  'Restart your computer after installation',
+                  'Try installing Qwen with CUDA acceleration again'
+                ],
+                fallbackToCpu: { engine: 'qwen' }
+              })
+            }
           }
         }
-      }
 
-      return { success: false, error: `PyTorch verification failed: ${errorMsg}` }
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
     }
 
-    const { stdout } = verifyResult
-    if (!stdout.includes('OK')) {
-      return { success: false, error: 'PyTorch verification failed' }
+    if (!verifySuccess) {
+      return { success: false, error: `PyTorch verification failed: ${lastError}` }
     }
 
     // Pre-download Qwen3-TTS model (~1.2GB)

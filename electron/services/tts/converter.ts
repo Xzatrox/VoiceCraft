@@ -17,7 +17,8 @@ import {
 import {
   getTTSServerStatus,
   generateViaServer,
-  generateViaServerForPreview
+  generateViaServerForPreview,
+  generateBatchViaServer
 } from './server'
 import {
   RHVOICE_VOICES,
@@ -1490,10 +1491,14 @@ export async function convertToSpeech(
 
   // Concurrency limits depend on provider
   // Coqui XTTS is slow and memory-intensive, process sequentially
+  // Qwen uses batch inference (handled separately below), so concurrentLimit is for fallback only
   const concurrentLimit = voiceInfo.provider === 'coqui' || voiceInfo.provider === 'qwen' ? 1 :
                          voiceInfo.provider === 'silero' ? 5 :
                          voiceInfo.provider === 'piper' ? 10 :
                          voiceInfo.provider === 'elevenlabs' ? 3 : 30
+
+  // Qwen batch size for batch inference (generates multiple texts in one model call)
+  const qwenBatchSize = 5
 
   onProgress?.(0, `Preparing ${totalChunks} text segments in ${totalParts} parts... (${voiceInfo.provider})`)
 
@@ -1524,6 +1529,28 @@ export async function convertToSpeech(
     }
   }
 
+  const reportProgress = (chunkDuration?: number) => {
+    if (chunkDuration !== undefined) {
+      chunkCompletionTimes.push(chunkDuration)
+    }
+    let statusMessage = ''
+    if (completedChunks >= 3) {
+      const recentTimes = chunkCompletionTimes.slice(-10)
+      const avgTimePerChunk = recentTimes.reduce((a, b) => a + b, 0) / recentTimes.length
+      const remainingChunks = totalChunks - completedChunks
+      const effectiveConcurrency = voiceInfo!.provider === 'qwen' ? qwenBatchSize : concurrentLimit
+      const estimatedRemainingMs = (remainingChunks * avgTimePerChunk) / effectiveConcurrency
+      const splitInfo = totalAudioFiles > completedChunks ? ` (${totalAudioFiles} audio)` : ''
+      statusMessage = `~${formatTime(estimatedRemainingMs)} remaining | Segment ${completedChunks} of ${totalChunks}${splitInfo}`
+    } else {
+      statusMessage = `Calculating time... | Segment ${completedChunks} of ${totalChunks}`
+    }
+    onProgress?.(
+      Math.round((completedChunks / totalChunks) * 90),
+      statusMessage
+    )
+  }
+
   const processNextChunk = async () => {
     const currentIndex = nextChunkIndex++
     if (currentIndex >= chunks.length) return
@@ -1546,7 +1573,6 @@ export async function convertToSpeech(
         totalAudioFiles += result.files.length
         successfulChunks++
 
-        // Log if chunk was split
         if (result.files.length > 1) {
           console.log(`Chunk ${currentIndex + 1} was split into ${result.files.length} parts`)
         }
@@ -1558,25 +1584,7 @@ export async function convertToSpeech(
       }
 
       completedChunks++
-      const chunkDuration = Date.now() - chunkStartTime
-      chunkCompletionTimes.push(chunkDuration)
-
-      let statusMessage = ''
-      if (completedChunks >= 3) {
-        const recentTimes = chunkCompletionTimes.slice(-10)
-        const avgTimePerChunk = recentTimes.reduce((a, b) => a + b, 0) / recentTimes.length
-        const remainingChunks = totalChunks - completedChunks
-        const estimatedRemainingMs = (remainingChunks * avgTimePerChunk) / concurrentLimit
-        const splitInfo = totalAudioFiles > completedChunks ? ` (${totalAudioFiles} audio)` : ''
-        statusMessage = `~${formatTime(estimatedRemainingMs)} remaining | Segment ${completedChunks} of ${totalChunks}${splitInfo}`
-      } else {
-        statusMessage = `Calculating time... | Segment ${completedChunks} of ${totalChunks}`
-      }
-
-      onProgress?.(
-        Math.round((completedChunks / totalChunks) * 90),
-        statusMessage
-      )
+      reportProgress(Date.now() - chunkStartTime)
     } catch (error) {
       errors.push({
         chunk: currentIndex + 1,
@@ -1586,18 +1594,92 @@ export async function convertToSpeech(
     }
   }
 
-  // Process chunks with proper parallelization
-  for (let i = 0; i < chunks.length; i += concurrentLimit) {
-    // Check if conversion was aborted
-    if (isAborted?.()) {
-      return
-    }
+  // Qwen batch inference path: send multiple chunks in one model call
+  if (voiceInfo.provider === 'qwen') {
+    const qwenLang = voiceInfo.locale?.startsWith('ru') ? 'ru' : 'en'
+    const qwenSpeaker = voiceInfo.name.replace(/\s*\(EN\)$/, '')
 
-    const batch = []
-    for (let j = 0; j < concurrentLimit && i + j < chunks.length; j++) {
-      batch.push(processNextChunk())
+    for (let i = 0; i < chunks.length; i += qwenBatchSize) {
+      if (isAborted?.()) return
+
+      const batchEnd = Math.min(i + qwenBatchSize, chunks.length)
+      const batchChunks = chunks.slice(i, batchEnd)
+      const batchIndices = Array.from({ length: batchEnd - i }, (_, j) => i + j)
+      const batchOutputPaths = batchIndices.map(idx =>
+        path.join(tempDir, `chunk_${String(idx).padStart(4, '0')}.wav`)
+      )
+
+      const batchStartTime = Date.now()
+      let batchSuccess = false
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await generateBatchViaServer(
+            batchChunks.map(text => ({
+              engine: 'qwen' as const,
+              text,
+              speaker: qwenSpeaker,
+              language: qwenLang,
+            })),
+            batchOutputPaths
+          )
+          batchSuccess = true
+          break
+        } catch (error) {
+          console.error(`Qwen batch ${i}-${batchEnd} attempt ${attempt}/${maxRetries}:`, error)
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, retryDelay))
+          }
+        }
+      }
+
+      const batchDuration = Date.now() - batchStartTime
+      const perChunkDuration = batchDuration / batchChunks.length
+
+      for (let j = 0; j < batchIndices.length; j++) {
+        const idx = batchIndices[j]
+        const outPath = batchOutputPaths[j]
+
+        if (batchSuccess && fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+          audioFilesPerChunk[idx] = [outPath]
+          totalAudioFiles++
+          successfulChunks++
+        } else {
+          // Fallback: try single generation for this chunk
+          try {
+            const singlePath = path.join(tempDir, `chunk_${String(idx).padStart(4, '0')}_single.wav`)
+            await generateViaServer('qwen', chunks[idx], qwenSpeaker, qwenLang, singlePath)
+            if (fs.existsSync(singlePath) && fs.statSync(singlePath).size > 0) {
+              audioFilesPerChunk[idx] = [singlePath]
+              totalAudioFiles++
+              successfulChunks++
+            } else {
+              errors.push({ chunk: idx + 1, error: 'Batch and single generation both failed' })
+            }
+          } catch (singleError) {
+            errors.push({
+              chunk: idx + 1,
+              error: singleError instanceof Error ? singleError.message : 'Unknown error'
+            })
+          }
+        }
+        completedChunks++
+        reportProgress(perChunkDuration)
+      }
     }
-    await Promise.all(batch)
+  } else {
+    // Non-Qwen providers: process chunks with standard parallelization
+    for (let i = 0; i < chunks.length; i += concurrentLimit) {
+      if (isAborted?.()) {
+        return
+      }
+
+      const batch = []
+      for (let j = 0; j < concurrentLimit && i + j < chunks.length; j++) {
+        batch.push(processNextChunk())
+      }
+      await Promise.all(batch)
+    }
   }
 
   // Flatten audio files - each chunk may have produced multiple files if it was split

@@ -119,21 +119,20 @@ export function checkCoquiInstalled(): boolean {
 }
 
 // Check if Qwen is installed for a specific accelerator
+// Note: Qwen uses tts_server.py (not generate.py) for speech generation
 export function checkQwenInstalledForAccelerator(accelerator: AcceleratorType): boolean {
   const qwenPath = getQwenPathForAccelerator(accelerator)
   const enginePython = getEnginePythonExe('qwen', accelerator)
-  const generateScript = path.join(qwenPath, 'generate.py')
   const configFile = path.join(qwenPath, 'accelerator.json')
 
-  // Check if engine-specific Python exists
   const pythonExists = existsSync(enginePython)
-  const scriptExists = existsSync(generateScript)
   const configExists = existsSync(configFile)
 
-  return pythonExists && scriptExists && configExists
+  return pythonExists && configExists
 }
 
 // Check if Qwen is set up and working (any accelerator version)
+// Note: Qwen uses tts_server.py (not generate.py) for speech generation
 export function checkQwenInstalled(): boolean {
   // Check if any version is installed
   const installedAccelerators = getInstalledAccelerators('qwen')
@@ -142,7 +141,6 @@ export function checkQwenInstalled(): boolean {
   }
 
   // Legacy check for old 'qwen' folder (without accelerator suffix)
-  // This handles both old venv structure and new python folder structure
   const qwenPath = path.join(path.dirname(getQwenPath()), 'qwen')
   const venvPython = process.platform === 'darwin'
     ? path.join(qwenPath, 'venv', 'bin', 'python3')
@@ -150,22 +148,22 @@ export function checkQwenInstalled(): boolean {
   const enginePython = process.platform === 'darwin'
     ? path.join(qwenPath, 'python', 'bin', 'python3')
     : path.join(qwenPath, 'python', 'python.exe')
-  const generateScript = path.join(qwenPath, 'generate.py')
+  const configFile = path.join(qwenPath, 'accelerator.json')
 
   const venvPythonExists = existsSync(venvPython)
   const enginePythonExists = existsSync(enginePython)
   const pythonExists = venvPythonExists || enginePythonExists
-  const scriptExists = existsSync(generateScript)
+  const configExists = existsSync(configFile)
 
   console.log('Qwen check:', {
     installedAccelerators,
     legacyPath: qwenPath,
     venvPythonExists,
     enginePythonExists,
-    scriptExists
+    configExists
   })
 
-  return pythonExists && scriptExists
+  return pythonExists && configExists
 }
 
 // Check which dependencies are installed

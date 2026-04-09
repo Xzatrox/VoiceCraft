@@ -467,6 +467,36 @@ export async function generateViaServer(
   fs.writeFileSync(outputPath, audioBuffer)
 }
 
+// Batch generation for Qwen — sends multiple texts in one request, returns array of WAV buffers
+export async function generateBatchViaServer(
+  items: Array<{
+    engine: 'qwen'
+    text: string
+    speaker: string
+    language: string
+    instruction?: string
+  }>,
+  outputPaths: string[]
+): Promise<void> {
+  const body = JSON.stringify({ items })
+  const timeout = 360000 * items.length
+  const response = await httpRequestWithTimeout(`${TTS_SERVER_URL}/generate-batch`, 'POST', body, timeout)
+  const data = JSON.parse(response)
+
+  if (data.error) {
+    throw new Error(data.error)
+  }
+
+  const wavs: string[] = data.wavs
+  for (let i = 0; i < wavs.length && i < outputPaths.length; i++) {
+    const outputDir = path.dirname(outputPaths[i])
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true })
+    }
+    fs.writeFileSync(outputPaths[i], Buffer.from(wavs[i], 'base64'))
+  }
+}
+
 // Abortable version for preview
 export async function generateViaServerForPreview(
   engine: 'silero' | 'coqui' | 'qwen',
